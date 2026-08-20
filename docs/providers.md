@@ -8,7 +8,7 @@ read_when:
 
 # Providers
 
-CodexBar currently registers 69 provider IDs. Some companies expose multiple surfaces, such as Codex vs OpenAI API or
+CodexBar currently registers 70 provider IDs. Some companies expose multiple surfaces, such as Codex vs OpenAI API or
 OpenCode vs OpenCode Go, because the auth source and quota shape differ.
 
 ## Fetch strategies (current)
@@ -87,6 +87,7 @@ scan fails, while provider/account configuration changes replace obsolete result
 | Grok | `grok agent stdio` JSON-RPC `x.ai/billing` (`cli`) → grok.com billing gRPC-web via Chrome session cookies (`web`); local `~/.grok/sessions` signals as fallback. |
 | GroqCloud | API key → Prometheus metrics API for request/token/cache-hit rates (`api`). |
 | LLM Proxy | API key + base URL → `/v1/quota-stats` aggregate proxy usage (`api`). |
+| CLIProxyAPI | Management key + base URL → `/v0/management/auth-files` and `api-call` for Codex/Gemini/Antigravity/Grok quota (`api`). |
 | ClawRouter | API key + optional base URL → `/v1/usage` monthly budget, spend, and routed-provider usage (`api`). |
 | Wayfinder | Local gateway URL → `/healthz`, `/v1/savings`, `/router/models`, `/metrics` for health, routing split, savings, and decision latency (`api`). |
 | LiteLLM | API key + base URL → `/key/info`, then `/user/info` or `/team/info` budget usage (`api`). |
@@ -524,6 +525,14 @@ JavaScriptCore is the macOS rollback engine. The committed `.js` is generated fr
 - Reads `/v1/quota-stats` for aggregate proxy usage with lowest remaining quota, requests, tokens, and approximate cost.
 - Status: none yet.
 - Details: `docs/llm-proxy.md`.
+
+## CLIProxyAPI
+- Management key from config `apiKey` or `CLIPROXYAPI_MANAGEMENT_KEY`; optional base URL from `enterpriseHost` or `CLIPROXYAPI_BASE_URL` (default `http://127.0.0.1:8317`).
+- Optional `workspaceID` / `CLIPROXYAPI_AUTH_INDEX` limits refresh to one credential.
+- Lists `/v0/management/auth-files`, then uses `/v0/management/api-call` to fetch Codex `wham/usage`, Gemini/Antigravity `retrieveUserQuota`, and Grok weekly credits.
+- Primary window is the highest used session/Pro lane among those accounts; extra rows name each account.
+- Status: none yet.
+- Details: `docs/cliproxyapi.md`.
 
 ## ClawRouter
 - API key from the resolved CodexBar config (`providers[].apiKey`) or `CLAWROUTER_API_KEY`.

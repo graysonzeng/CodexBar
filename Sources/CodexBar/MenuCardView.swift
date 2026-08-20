@@ -1317,6 +1317,7 @@ extension UsageMenuCardView.Model {
                 ? opus.resetDescription?.trimmingCharacters(in: .whitespacesAndNewlines)
                 : Self.resetText(for: opus, style: input.resetTimeDisplayStyle, now: input.now)
             let tertiaryPaceDetail = Self.resetWindowPaceDetail(window: opus, input: input)
+            let tertiaryCaptions = Self.displayedPaceCaptions(tertiaryPaceDetail, provider: input.provider)
             metrics.append(Metric(
                 id: "tertiary",
                 title: labels.tertiary,
@@ -1324,8 +1325,8 @@ extension UsageMenuCardView.Model {
                 percentStyle: percentStyle,
                 resetText: opusResetText,
                 detailText: tertiaryDetailText,
-                detailLeftText: tertiaryPaceDetail?.leftLabel,
-                detailRightText: tertiaryPaceDetail?.rightLabel,
+                detailLeftText: tertiaryCaptions.left,
+                detailRightText: tertiaryCaptions.right,
                 pacePercent: tertiaryPaceDetail?.pacePercent,
                 paceOnTop: tertiaryPaceDetail?.paceOnTop ?? true,
                 warningMarkerPercents: Self.warningMarkerPercents(
@@ -1532,6 +1533,7 @@ extension UsageMenuCardView.Model {
             weeklyResetText = regen.resetText
             paceDetail = regen.pace
         }
+        let captions = Self.displayedPaceCaptions(paceDetail, provider: input.provider)
         return Metric(
             id: "secondary",
             title: title ?? L(input.metadata.weeklyLabel),
@@ -1540,8 +1542,8 @@ extension UsageMenuCardView.Model {
             statusText: nil,
             resetText: weeklyResetText,
             detailText: weeklyDetailText,
-            detailLeftText: paceDetail?.leftLabel,
-            detailRightText: paceDetail?.rightLabel,
+            detailLeftText: captions.left,
+            detailRightText: captions.right,
             pacePercent: paceDetail?.pacePercent,
             paceOnTop: paceDetail?.paceOnTop ?? true,
             warningMarkerPercents: Self.warningMarkerPercents(

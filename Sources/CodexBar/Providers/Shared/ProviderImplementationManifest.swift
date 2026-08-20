@@ -60,6 +60,7 @@ enum ProviderImplementationManifest {
         { GrokProviderImplementation() },
         { GroqProviderImplementation() },
         { LLMProxyProviderImplementation() },
+        { CLIProxyAPIProviderImplementation() },
         { LiteLLMProviderImplementation() },
         { DeepgramProviderImplementation() },
         { PoeProviderImplementation() },

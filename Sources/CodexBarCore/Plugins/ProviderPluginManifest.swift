@@ -363,8 +363,12 @@ public struct ProviderPluginManifest: Sendable {
         return value
     }
 
-    /// Provider-specific by design: only LLM Proxy and LiteLLM already grant private-network HTTP authority in Swift.
-    private static let bundledPrivateNetworkHTTPProviders: Set<UsageProvider> = [.llmproxy, .litellm]
+    /// Provider-specific by design: LLM Proxy, LiteLLM, and CLIProxyAPI grant private-network HTTP in Swift.
+    private static let bundledPrivateNetworkHTTPProviders: Set<UsageProvider> = [
+        .llmproxy,
+        .litellm,
+        .cliproxyapi,
+    ]
 }
 
 enum ProviderPluginOrigin {

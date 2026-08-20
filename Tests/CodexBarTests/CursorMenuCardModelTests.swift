@@ -105,7 +105,7 @@ struct CursorMenuCardModelTests {
     }
 
     @Test
-    func `cursor billing cycle metrics show deficit and run out details`() throws {
+    func `cursor billing cycle metrics keep pace markers without captions`() throws {
         let now = Date(timeIntervalSince1970: 0)
         let reset = now.addingTimeInterval(6 * 24 * 3600)
         let cycleMinutes = 30 * 24 * 60
@@ -140,8 +140,8 @@ struct CursorMenuCardModelTests {
         #expect(model.metrics.map(\.title) == ["Total", "Cursor", "Third Party"])
         for metric in model.metrics {
             #expect(metric.percentLabel == "10% left")
-            #expect(metric.detailLeftText == "10% in deficit")
-            #expect(metric.detailRightText == "Runs out in 2d 16h")
+            #expect(metric.detailLeftText == nil)
+            #expect(metric.detailRightText == nil)
             #expect(metric.pacePercent == 20)
             #expect(metric.paceOnTop == false)
         }

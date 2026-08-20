@@ -816,8 +816,8 @@
 "Resets in %@" = "%@后重置";
 "Resets now" = "立即重置";
 "reset_tomorrow_format" = "明天 %@";
-"Lasts until reset" = "持续到重置";
-"1.5× headroom" = "1.5 倍余量";
+"Lasts until reset" = "能撑到重置";
+"1.5× headroom" = "1.5 倍缓冲";
 "Updated %@" = "更新于 %@";
 "Updated relative %@" = "%@已更新";
 "Updated absolute %@" = "更新于 %@";
@@ -830,8 +830,8 @@
 "Pace: %@ · %@" = "节奏：%@ · %@";
 "%@ · %@" = "%@ · %@";
 "(%d%% risk)" = "(%d%% 耗尽风险)";
-"%d%% in deficit" = "超额 %d%%";
-"%d%% in reserve" = "余量 %d%%";
+"%d%% in deficit" = "比当前进度多用 %d%%";
+"%d%% in reserve" = "比当前进度少用 %d%%";
 "usage_percent_suffix_left" = "剩余";
 "usage_percent_suffix_used" = "已使用";
 "Store multiple DeepSeek API keys." = "存储多个 DeepSeek API 密钥。";

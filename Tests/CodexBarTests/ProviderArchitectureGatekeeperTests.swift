@@ -154,8 +154,8 @@ struct ProviderArchitectureGatekeeperTests {
             Self.hash(descriptor.branding.burnDownWidgetColor, into: &burnDownFingerprint)
         }
 
-        #expect(widgetFingerprint == 16_873_014_858_015_536_126)
-        #expect(burnDownFingerprint == 8_686_456_525_451_224_704)
+        #expect(widgetFingerprint == 1_673_962_213_770_052_353)
+        #expect(burnDownFingerprint == 4_946_263_398_761_520_690)
     }
 
     @Test
@@ -167,8 +167,8 @@ struct ProviderArchitectureGatekeeperTests {
             try Self.hash(#require(descriptor.metadata.debugLogUnavailableMessage?.utf8), into: &fingerprint)
         }
 
-        #expect(descriptors.count == 38)
-        #expect(fingerprint == 2_208_147_801_202_684_136)
+        #expect(descriptors.count == 39)
+        #expect(fingerprint == 14_691_402_907_585_381_354)
     }
 
     @Test

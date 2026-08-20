@@ -73,6 +73,7 @@ public enum UsageProvider: String, CaseIterable, Sendable, Codable {
     case grok
     case groq
     case llmproxy
+    case cliproxyapi
     case litellm
     case deepgram
     case poe

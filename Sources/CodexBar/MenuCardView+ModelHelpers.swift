@@ -153,6 +153,10 @@ extension UsageMenuCardView.Model {
         {
             Self.apply(paceDetail, to: &presentation)
         }
+        if policy.hidesPaceCaptions {
+            presentation.detailLeft = nil
+            presentation.detailRight = nil
+        }
     }
 
     static func applyPrimaryFinalOverrides(
@@ -187,6 +191,17 @@ extension UsageMenuCardView.Model {
         presentation.detailRight = paceDetail.rightLabel
         presentation.pacePercent = paceDetail.pacePercent
         presentation.paceOnTop = paceDetail.paceOnTop
+    }
+
+    static func displayedPaceCaptions(
+        _ detail: PaceDetail?,
+        provider: UsageProvider) -> (left: String?, right: String?)
+    {
+        guard let detail else { return (nil, nil) }
+        if ProviderDescriptorRegistry.descriptor(for: provider).presentation.menuCard.hidesPaceCaptions {
+            return (nil, nil)
+        }
+        return (detail.leftLabel, detail.rightLabel)
     }
 
     private static func nonEmptyResetDescription(_ window: RateWindow) -> String? {

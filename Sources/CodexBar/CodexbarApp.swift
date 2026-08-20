@@ -406,6 +406,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var codexAccountPromotionCoordinator: CodexAccountPromotionCoordinator?
     private var cloudSyncCoordinator: CloudSyncCoordinator?
     private var settingsWindowController: SettingsWindowController?
+    private lazy var placeholderSettingsWindowGuard = PlaceholderSettingsWindowGuard(
+        isKnownSettingsWindow: { [weak self] window in
+            self?.settingsWindowController?.window === window
+        })
     private var hasInstalledLimitResetObservers = false
     #if DEBUG
     private var debugMemoryPressureObserver: NSObjectProtocol?
@@ -438,6 +442,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         self.configureAppIconForMacOSVersion()
+        // The SwiftUI `Settings` scene is an empty placeholder; macOS otherwise presents it at launch.
+        self.placeholderSettingsWindowGuard.start()
+    }
+
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        // CodexBar lives in the menu bar and has no untitled document to open at launch or on reopen.
+        false
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -447,6 +458,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.installDebugMemoryPressureObserverIfNeeded()
         #endif
         self.ensureStatusController()
+        self.closeSwiftUISettingsPlaceholderWindow()
         self.observeSettingsApplicationMenuLanguage()
         self.scheduleSettingsApplicationMenuValidation(
             missingItemRetriesRemaining: Self.settingsMenuReadinessRetryCount,
@@ -483,6 +495,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 name: .codexbarWeeklyLimitReset,
                 object: nil)
             self.hasInstalledLimitResetObservers = true
+        }
+    }
+
+    /// The SwiftUI `Settings` scene exists only to own the app-menu Settings command; the real
+    /// settings window is AppKit-managed (`SettingsWindowController`). macOS can still present or
+    /// state-restore the scene's empty placeholder window at launch — close it and keep it out of
+    /// state restoration so it cannot come back on the next launch.
+    private func closeSwiftUISettingsPlaceholderWindow() {
+        DispatchQueue.main.async {
+            for window in NSApp.windows
+                where window.identifier?.rawValue.hasPrefix("com_apple_SwiftUI_Settings") == true
+            {
+                window.isRestorable = false
+                window.close()
+            }
         }
     }
 

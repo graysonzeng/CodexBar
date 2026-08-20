@@ -23,6 +23,7 @@ struct SettingsDefaultsState {
     var quotaWarningSoundEnabled: Bool
     var quotaWarningOnScreenAlertEnabled: Bool
     var quotaWarningMarkersVisible: Bool
+    var paceVisible: Bool
     var weeklyProgressWorkDays: Int?
     var workdayTickAppearanceRaw: String
     var usageBarsShowUsed: Bool
@@ -38,6 +39,7 @@ struct SettingsDefaultsState {
     var multiAccountMenuLayoutRaw: String
     var menuBarMetricPreferencesRaw: [String: String]
     var storedMenuBarLayout: MenuBarLayout?
+    var menuBarLayoutConditionals: [MenuBarLayoutConditional]
     var menuBarLayoutOverridesRaw: [String: MenuBarLayout]
     var menuBarLayoutSizeRaw: String
     var menuBarLayoutGapRaw: String

@@ -271,14 +271,16 @@ struct MenuDescriptor {
                 {
                     entries.append(.text(primaryDetail, .secondary))
                 }
-                if presentation.menu.showsPrimaryWeeklyPace,
+                if settings.paceVisible,
+                   presentation.menu.showsPrimaryWeeklyPace,
                    !presentation.menuCard.hidesPaceCaptions,
                    let pace = store.weeklyPace(provider: provider, window: primary)
                 {
                     let paceSummary = UsagePaceText.weeklySummary(provider: provider, pace: pace)
                     entries.append(.text(paceSummary, .secondary))
                 }
-                if !presentation.menuCard.hidesPaceCaptions,
+                if settings.paceVisible,
+                   !presentation.menuCard.hidesPaceCaptions,
                    let paceSummary = UsagePaceText.sessionSummary(provider: provider, window: primary)
                 {
                     entries.append(.text(paceSummary, .secondary))
@@ -311,7 +313,8 @@ struct MenuDescriptor {
                 {
                     entries.append(.text(detail, .secondary))
                 }
-                if !presentation.menuCard.hidesPaceCaptions,
+                if settings.paceVisible,
+                   !presentation.menuCard.hidesPaceCaptions,
                    let pace = store.weeklyPace(provider: provider, window: weekly)
                 {
                     let paceSummary = UsagePaceText.weeklySummary(provider: provider, pace: pace)
@@ -678,7 +681,7 @@ struct MenuDescriptor {
         snapshot: UsageSnapshot) -> (primary: String, secondary: String, tertiary: String, showsTertiary: Bool)
     {
         if provider == .factory, snapshot.tertiary != nil {
-            return ("5-hour", L("Weekly"), L("Monthly"), true)
+            return (L("5-hour"), L("Weekly"), L("Monthly"), true)
         }
         let primaryLabel = if provider == .codex {
             CodexConsumerProjection.rateTitle(

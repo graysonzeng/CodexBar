@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.54.1 — Unreleased
+
+- Fixed custom menu bar line breaks so provider icons stay above stacked usage percentages in the menu bar and layout preview (#3089).
+- Added conditional tokens to the menu bar layout editor: named, reusable if/then/else rules (1–4 AND/OR clauses over Session/Weekly/Scoped/Auto thresholds) that swap or hide tokens based on live usage, downgrade-safe and localized across all 23 catalogs (#3076). Thanks @wdmitchelluk!
+- Fixed inconsistent German localization of "About" ("Um" → "Über") (#3077). Thanks @dwt!
+- Localized provider usage details in Simplified Chinese: DeepSeek detailed usage/balance, z.ai/GLM quota details, token charts, and the 5-hour reset text (#3084). Thanks @haixing23!
+- Localized remaining provider-detail edge cases in Simplified Chinese: DeepSeek zero-balance/unavailable-API text, z.ai one-sided quota values, credit-plan rates, peak/off-peak states, and countdown shapes (#3086). Thanks @haixing23!
+- Fireworks: auto-discover account slugs from API keys and report invalid or ambiguous accounts instead of silently showing no spend (#3068, #3074).
+- Fixed Codex cost catch-up getting stuck when recently touched session files contain only out-of-window usage — processed zero-row files now drain from the pending queue and existing stuck states self-heal (#3071, #3075).
+- Share one immutable spend-source catalog between Overview and Usage & Spend: multi-account Codex identities, per-source states, 365-day inputs, configured calendar/currency, and OpenCodex enrichment without double counting (#3067). Thanks @Chipagosfinest!
+- Fixed `codexbar cost` SIGSEGV on Linux: `Bundle.allBundles` crashes under swift-corelibs-foundation, so test detection now checks the main executable path instead (#3058, #3059). Thanks @Lucenx9!
+- Codex: added a personal-access-token usage source — `personal_access_token` in `auth.json` gets its own PAT strategy (whoami then `/wham/usage`), Auto prefers a usable PAT and falls back to OAuth/CLI, and ambient-home PATs are found when a managed profile would hide them (#3060). Thanks @oakimov!
+- Count every enabled provider in Overview spend instead of only the six displayed cards, and bucket Overview spend with the configured calendar so boundary days match the dashboard (#3063, #3064). Thanks @Chipagosfinest!
+- Hide untouched Antigravity model families in the `codexbar serve` web dashboard, matching the menu and widgets (#3061). Thanks @urda!
+- Documented the AI Usage Limits Stream Deck plugin in the README integrations list (#3066). Thanks @lenadweb!
+- OpenCode Go: use the public authenticated usage API when `OPENCODE_API_KEY` is configured, overlaying authoritative rolling/weekly/monthly windows on local history with cookie fallback (#2879, #3065). Thanks @akshayprabhu200!
+- Claude: keep 100% claude-swap usage bars when cswap defers polling at a limit, and name the exhausted window and reset instead of showing "Usage fetch failed." (#3081). Thanks @sf-jin-ku!
+
+## 0.54.0 — 2026-08-18
+
+### Highlights
+- **Blank Settings window fixed**: the empty "CodexBar Settings" window that opened on every launch since 0.52.0 is gone (#3048, #3053).
+- **Menu bar lanes you can pin**: provider-specific layouts now offer direct `Total %` / `Cursor %` / `Third Party %` lane tokens, downgrade-safe (#3038, #3052).
+- **Honest historical pricing**: GPT-5.6 Terra/Luna costs use the rates in effect on each request day, and OpenCodex usage routes into the right subscription rows (#3037, #3046).
+
+### Fixed
+- Fixed the blank "CodexBar Settings" window that opened on every launch since 0.52.0: the app now declines macOS's untitled-window path and closes the empty SwiftUI Settings placeholder if restoration brings it back (#3048, #3053, #3056). Thanks @elijahfriedman!
+- Fixed the cost, credits, and usage-breakdown charts so the hover highlight aligns with the bar under the cursor instead of sitting half a day off (#3040, #3049).
+- Fixed: Amp CLI parsing follows the new `Amp <plan> Subscription:` line format so Megawatt usage windows show again (#3050, #3057).
+- Fixed GPT-5.6 Terra/Luna historical cost aggregates to use the rates in effect on each request day instead of silently repricing pre-2026-07-30 usage at the cut rates (#2671, #3037). Thanks @Yuxin-Qiao!
+
+### Menu Bar & Layouts
+- Added direct primary/secondary/tertiary usage lane tokens to provider-specific menu bar layouts, so Cursor layouts can pin `Total %`, `Cursor %`, or `Third Party %` (#3038, #3039). Thanks @giuseppebisemi!
+- Keep custom menu bar layouts safe across downgrades: older releases read a Session/Weekly/Auto projection of lane tokens, Kimi lanes map through its reversed semantic windows, and direct tertiary lanes refresh independently (#3052). Thanks @giuseppebisemi!
+- Added a "Show pace" setting to hide the usage pace stripe and forecast text, on by default (#3055). Thanks @urda!
+
+### Usage & Spend
+- Account for every connected provider in Overview spend: exact OpenRouter 30-day Activity spend via an optional management API key, with coverage shown instead of a false `$0` when a source can't report (#3054). Thanks @Chipagosfinest!
+- Fan OpenCodex usage into the matching Codex, OpenCode Go, Kimi, and DeepSeek subscription rows and exclude routed models from Codex session spend totals (#3044, #3046, #3047). Thanks @Yuxin-Qiao!
+- Chart OpenCodex spend by per-request hour in the pinned timezone instead of session last-activity (#3031). Thanks @Yuxin-Qiao!
+- Union spend dashboard token activity across sources with partial coverage instead of blanking days any single source missed (#3042). Thanks @Yuxin-Qiao!
+- Coalesce spend dashboard refreshes during in-flight same-owner revision churn and skip same-day rescans on pane revisits (#3041). Thanks @Yuxin-Qiao!
+- Keep Copy JSON alongside a new save-to-file panel for Usage & Spend JSON exports (#3032). Thanks @Yuxin-Qiao!
+- Keep model rows with cost visible on the spend dashboard when only some breakdowns report tokens (#3045). Thanks @Yuxin-Qiao!
+- Show spend dashboard row metrics as cost and tokens together instead of cost-only (#3043). Thanks @Yuxin-Qiao!
+- Documented custom-pricing overlays and the Usage & Spend surface (#3033). Thanks @Yuxin-Qiao!
+- Localized the Codex local session cost estimate setting in Korean (#3034). Thanks @Yoonkeee!
+
 ## 0.53.0 — 2026-08-18
 
 ### Highlights
@@ -18,6 +66,7 @@
 - Keep unpriced named models visible in the model breakdown list instead of dropping the whole source (#3004). Thanks @Yuxin-Qiao!
 - Keep priced Cursor days visible when some events omit totalCents, and stop invalid Cursor model costs from reviving on later events (#3005). Thanks @Yuxin-Qiao!
 - Claude spend: price bare first-party model IDs from their models.dev vendor catalog, preserve explicit routes, and leave ambiguous cross-vendor matches unpriced (#3002). Thanks @Yuxin-Qiao!
+- Save Export JSON through a native file panel and keep Copy JSON for quick clipboard access (#3032). Thanks @Yuxin-Qiao!
 
 ### Reliability
 - iCloud sync: stop awaiting CKSyncEngine from within its own delegate callbacks, fixing a fatal CloudKit assertion crash minutes after launch with sync enabled (#3030). Thanks @toads for the crash forensics!

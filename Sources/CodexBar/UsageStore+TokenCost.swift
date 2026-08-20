@@ -111,8 +111,7 @@ extension UsageStore {
               publication.scopeSignature == self.tokenSnapshotScopeSignature(for: provider)
         else { return nil }
         return CurrentProviderConfigTokenPublication(
-            snapshot: publication.snapshot,
-            publicationRevision: publication.publicationRevision)
+            snapshot: publication.snapshot, publicationRevision: publication.publicationRevision)
     }
 
     func tokenSnapshotPublicationRevision(for provider: UsageProvider) -> UInt64 {
@@ -136,6 +135,7 @@ extension UsageStore {
             publicationRevision: self.tokenSnapshotPublicationRevision(for: provider),
             providerConfigRevision: self.settings.providerConfigRevision(for: provider),
             scopeSignature: self.tokenSnapshotScopeSignature(for: provider))
+        self.synchronizeSharedSpendDashboardAfterTokenPublication(for: provider)
     }
 
     func installCachedTokenSnapshot(_ snapshot: CostUsageTokenSnapshot, for provider: UsageProvider) {
@@ -462,6 +462,8 @@ extension UsageStore {
                 usage.daily.isEmpty ? nil : usage
                     .toCostUsageTokenSnapshot(historyDays: windowDays)
             }
+        case .openrouter:
+            return snapshot?.costUsage
         default:
             return nil
         }
@@ -469,7 +471,7 @@ extension UsageStore {
 
     nonisolated static func tokenCostRequiresProviderSnapshot(_ provider: UsageProvider) -> Bool {
         switch provider {
-        case .mistral, .openai, .opencodego:
+        case .mistral, .openai, .opencodego, .openrouter:
             true
         default:
             false

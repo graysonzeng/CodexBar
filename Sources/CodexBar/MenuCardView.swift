@@ -41,6 +41,8 @@ struct UsageMenuCardView: View {
             let detailLeftText: String?
             let detailRightText: String?
             let pacePercent: Double?
+            /// True when detailLeftText/detailRightText came from a pace forecast.
+            let detailIsPaceDerived: Bool
             let paceOnTop: Bool
             let warningMarkerPercents: [Double]
             let workdayMarkerPercents: [Double]
@@ -59,6 +61,7 @@ struct UsageMenuCardView: View {
                 detailLeftText: String?,
                 detailRightText: String?,
                 pacePercent: Double?,
+                detailIsPaceDerived: Bool = false,
                 paceOnTop: Bool,
                 warningMarkerPercents: [Double] = [],
                 workdayMarkerPercents: [Double] = [],
@@ -76,6 +79,7 @@ struct UsageMenuCardView: View {
                 self.detailLeftText = detailLeftText
                 self.detailRightText = detailRightText
                 self.pacePercent = pacePercent
+                self.detailIsPaceDerived = detailIsPaceDerived
                 self.paceOnTop = paceOnTop
                 self.warningMarkerPercents = warningMarkerPercents
                 self.workdayMarkerPercents = workdayMarkerPercents
@@ -944,7 +948,7 @@ extension UsageMenuCardView.Model {
             override: input.planOverride,
             metadata: input.metadata)
         let metrics = Self.redactedMetrics(
-            Self.metrics(input: input),
+            Self.paceGatedMetrics(Self.metrics(input: input), paceVisible: input.paceVisible),
             provider: input.provider,
             hidePersonalInfo: input.hidePersonalInfo)
         let openAIAPIUsage = input.snapshot?.openAIAPIUsage
@@ -1055,6 +1059,7 @@ extension UsageMenuCardView.Model {
         if input.provider == .sub2api {
             details = Self.sub2APILocalizedDetails(details)
         }
+        details = Self.localizedProviderDetails(details, provider: input.provider)
         guard input.hidePersonalInfo else { return details }
         return details.compactMap { section in
             let rows = section.rows.compactMap { row in
@@ -1328,6 +1333,7 @@ extension UsageMenuCardView.Model {
                 detailLeftText: tertiaryCaptions.left,
                 detailRightText: tertiaryCaptions.right,
                 pacePercent: tertiaryPaceDetail?.pacePercent,
+                detailIsPaceDerived: tertiaryPaceDetail?.isPaceDerived ?? false,
                 paceOnTop: tertiaryPaceDetail?.paceOnTop ?? true,
                 warningMarkerPercents: Self.warningMarkerPercents(
                     thresholds: input.quotaWarningThresholds[.weekly],
@@ -1393,6 +1399,10 @@ extension UsageMenuCardView.Model {
             Self.applyPrimaryPacePresentation(&presentation, input: input, primary: primary)
         }
         Self.applyPrimaryFinalOverrides(&presentation, input: input, primary: primary)
+        // Provider-specific by design: z.ai's textual 5-hour reset phrase is provider-owned copy localized here.
+        if input.provider == .zai, let resetText = Self.localizedZaiPeriodicResetText(primary) {
+            presentation.resetText = resetText
+        }
         if let bindingProjection {
             let resetWindow = RateWindow(
                 usedPercent: bindingProjection.usedPercent,
@@ -1416,6 +1426,7 @@ extension UsageMenuCardView.Model {
             detailLeftText: presentation.detailLeft,
             detailRightText: presentation.detailRight,
             pacePercent: presentation.pacePercent,
+            detailIsPaceDerived: presentation.detailIsPaceDerived,
             paceOnTop: presentation.paceOnTop,
             warningMarkerPercents: Self.warningMarkerPercents(
                 thresholds: input.quotaWarningThresholds[.session],
@@ -1545,6 +1556,7 @@ extension UsageMenuCardView.Model {
             detailLeftText: captions.left,
             detailRightText: captions.right,
             pacePercent: paceDetail?.pacePercent,
+            detailIsPaceDerived: paceDetail?.isPaceDerived ?? false,
             paceOnTop: paceDetail?.paceOnTop ?? true,
             warningMarkerPercents: Self.warningMarkerPercents(
                 thresholds: input.quotaWarningThresholds[.weekly],

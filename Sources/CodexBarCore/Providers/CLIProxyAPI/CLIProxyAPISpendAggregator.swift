@@ -324,7 +324,7 @@ public enum CLIProxyAPISpendAggregator {
         {
             return cost
         }
-        return CostUsagePricing.claudeCostUSD(
+        if let cost = CostUsagePricing.claudeCostUSD(
             model: event.model,
             inputTokens: input,
             cacheReadInputTokens: cacheRead,
@@ -333,6 +333,115 @@ public enum CLIProxyAPISpendAggregator {
             pricingDate: event.occurredAt,
             modelsDevCatalog: modelsDevCatalog,
             modelsDevCacheRoot: modelsDevCacheRoot)
+        {
+            return cost
+        }
+        if let cost = Self.xaiListPriceUSD(
+            event: event,
+            input: input,
+            output: output,
+            cacheRead: cacheRead,
+            cacheWrite: cacheWrite)
+        {
+            return cost
+        }
+        return Self.gatewayListPriceUSD(
+            event: event,
+            input: input,
+            output: output,
+            cacheRead: cacheRead,
+            cacheWrite: cacheWrite)
+    }
+
+    private static func gatewayListPriceUSD(
+        event: CLIProxyAPISpendEvent,
+        input: Int,
+        output: Int,
+        cacheRead: Int,
+        cacheWrite: Int) -> Double?
+    {
+        let model = CostUsageCustomPricing.normalizeKey(event.model)
+        let native = model.split(separator: "/").last.map(String.init) ?? model
+        let rates: CostUsageCustomPricing.Rates?
+        if native.contains("deepseek-v4-flash") || native == "deepseek-chat" || native == "deepseek-reasoner" {
+            rates = .init(input: 0.14, output: 0.28, cacheRead: 0.0028)
+        } else if native == "gpt-5.6-sol" || native == "gpt-5.6" {
+            rates = .init(input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25)
+        } else {
+            rates = nil
+        }
+        guard let rates else { return nil }
+        return CostUsageCustomPricing.costUSD(
+            rates: rates,
+            inputTokens: input,
+            outputTokens: output,
+            cacheReadTokens: cacheRead,
+            cacheWriteTokens: cacheWrite)
+    }
+
+    private static func xaiListPriceUSD(
+        event: CLIProxyAPISpendEvent,
+        input: Int,
+        output: Int,
+        cacheRead: Int,
+        cacheWrite: Int) -> Double?
+    {
+        let upstream = event.upstreamProvider.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let model = CostUsageCustomPricing.normalizeKey(event.model)
+        guard upstream == "xai" || upstream == "grok" || model.hasPrefix("grok") else { return nil }
+        guard var rates = Self.xaiRates(for: model) else { return nil }
+        if input >= 200_000, Self.xaiUsesLongContextRates(for: model) {
+            rates.input = rates.input.map { $0 * 2 }
+            rates.output = rates.output.map { $0 * 2 }
+            rates.cacheRead = rates.cacheRead.map { $0 * 2 }
+        }
+        return CostUsageCustomPricing.costUSD(
+            rates: rates,
+            inputTokens: input,
+            outputTokens: output,
+            cacheReadTokens: cacheRead,
+            cacheWriteTokens: cacheWrite)
+    }
+
+    private static func xaiUsesLongContextRates(for model: String) -> Bool {
+        let native = model.hasPrefix("xai/") ? String(model.dropFirst(4)) : model
+        switch native {
+        case "grok-3-mini", "grok-3-mini-fast":
+            return false
+        default:
+            return true
+        }
+    }
+
+    private static func xaiRates(for model: String) -> CostUsageCustomPricing.Rates? {
+        let native = model.hasPrefix("xai/") ? String(model.dropFirst(4)) : model
+        if native.contains("imagine") || native.contains("video") { return nil }
+        switch native {
+        case "grok", "grok-latest", "grok-4.6", "grok-4.6-latest":
+            return .init(input: 2, output: 6, cacheRead: 0.5)
+        case "grok-4.5", "grok-4.5-latest":
+            return .init(input: 2, output: 6, cacheRead: 0.3)
+        case "grok-3-mini":
+            return .init(input: 0.30, output: 0.50, cacheRead: 0.075)
+        case "grok-3-mini-fast":
+            return .init(input: 0.60, output: 4, cacheRead: 0.15)
+        case "grok-4.3", "grok-4.3-latest":
+            return .init(input: 1.25, output: 2.5, cacheRead: 0.2)
+        case "grok-4.20-0309-reasoning",
+             "grok-4.20-0309-non-reasoning",
+             "grok-4.20-multi-agent-0309",
+             "grok-4.20-reasoning",
+             "grok-4.20-non-reasoning":
+            return .init(input: 1.25, output: 2.5, cacheRead: 0.2)
+        case "grok-build", "grok-build-latest", "grok-build-0.1",
+             "grok-composer", "grok-composer-2.5-fast", "composer-2.5":
+            return .init(input: 1, output: 2, cacheRead: 0.2)
+        default:
+            guard native.hasPrefix("grok-"), native.count > 5 else { return nil }
+            let rest = native.dropFirst(5)
+            guard let first = rest.first, first.isNumber else { return nil }
+            return .init(input: 2, output: 6, cacheRead: 0.5)
+        }
     }
 
     private static func modelsDevCostUSD(

@@ -14,7 +14,7 @@ public enum CLIProxyAPISpendSnapshot {
         historyDays: Int,
         calendar: Calendar,
         store: CLIProxyAPISpendStore? = nil,
-        customPricing: CostUsageCustomPricing = .empty,
+        customPricing: CostUsageCustomPricing = CostUsageCustomPricing.load(),
         client: CLIProxyAPIManagementClient? = nil) async throws -> CostUsageTokenSnapshot
     {
         let resolvedStore = store ?? CLIProxyAPISpendStore(cacheRoot: CLIProxyAPISpendStore.defaultRootURL())

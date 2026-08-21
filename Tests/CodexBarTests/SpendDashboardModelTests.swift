@@ -100,6 +100,27 @@ struct SpendDashboardModelTests {
     }
 
     @Test
+    func `cliproxyapi-only observed spend remains available in group totals`() throws {
+        let model = SpendDashboardModel.build(
+            inputs: [
+                Self.input(id: "proxy", provider: .cliproxyapi, currency: "USD", cost: 50),
+            ],
+            requestedDays: 30,
+            now: Self.now,
+            calendar: Self.calendar)
+        let group = try #require(model.groups.first)
+        #expect(group.totalCost == 50)
+        #expect(group.dailyPoints.map(\.cost) == [50])
+        CodexBarLocalizationOverride.$appLanguage.withValue("en") {
+            #expect(spendDashboardGroupCostText(group) != "Spend unavailable")
+            #expect(spendDashboardProvenanceText(group.provenance) != "Spend unavailable")
+            #expect(SpendDailyChartPresentation(
+                dailyPoints: group.dailyPoints,
+                aggregateTotal: group.totalCost).content == .chart)
+        }
+    }
+
+    @Test
     func `native currencies stay separate and rank only within their currency`() throws {
         let model = SpendDashboardModel.build(
             inputs: [

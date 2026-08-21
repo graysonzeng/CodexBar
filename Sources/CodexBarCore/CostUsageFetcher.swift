@@ -1582,7 +1582,8 @@ extension CostUsageFetcher {
                 environment: environment,
                 now: now,
                 historyDays: historyDays,
-                calendar: calendar)
+                calendar: calendar,
+                customPricing: CostUsageCustomPricing.load())
         }
 
         // Provider-specific by design: Bedrock uses AWS billing while Cursor uses its macOS dashboard session.

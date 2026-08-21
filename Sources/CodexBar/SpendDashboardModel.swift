@@ -504,14 +504,15 @@ struct SpendDashboardModel: Equatable, Sendable {
             bounds: bounds,
             calendar: calendar)
         let billedProviders = providers.filter { $0.provider != .cliproxyapi }
+        let totalProviders = billedProviders.isEmpty ? providers : billedProviders
         return CurrencyGroup(
             currencyCode: currencyCode,
             providers: providers,
             models: modelSummary.rows,
             projects: Self.projectRows(summaries: summaries, bounds: bounds, calendar: calendar),
             dailyPoints: dailyPoints,
-            totalTokens: Self.knownIntSum(billedProviders.map(\.totalTokens)),
-            totalCost: Self.knownCostSum(billedProviders.map(\.totalCost)),
+            totalTokens: Self.knownIntSum(totalProviders.map(\.totalTokens)),
+            totalCost: Self.knownCostSum(totalProviders.map(\.totalCost)),
             coveredDayCount: Self.commonCoverageDayCount(summaries: summaries, calendar: calendar),
             chartDomain: Self.chartDomain(bounds: bounds, calendar: calendar),
             modelHistoryCompleteness: modelHistoryCompleteness,

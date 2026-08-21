@@ -335,6 +335,60 @@ struct CLIProxyAPISpendTests {
                 modelsDevCatalog: catalog) == nil)
     }
 
+    @Test
+    func `list price uses bundled xAI grok cards when models.dev has no grok-4_6`() {
+        let now = Date(timeIntervalSince1970: 1_787_212_800)
+        let grok46 = CLIProxyAPISpendEvent(
+            requestID: "grok-46",
+            occurredAt: now,
+            authIndex: "idx-1",
+            upstreamProvider: "xai",
+            model: "grok-4.6",
+            alias: "grok-4.6",
+            tokens: CLIProxyAPISpendTokenMix(inputTokens: 100_000, outputTokens: 100_000, totalTokens: 200_000),
+            failed: false,
+            statusCode: 200)
+        #expect(abs((CLIProxyAPISpendAggregator.listPriceUSD(event: grok46, customPricing: .empty) ?? -1) - 0.8) < 1e-9)
+
+        let mini = CLIProxyAPISpendEvent(
+            requestID: "grok-mini",
+            occurredAt: now,
+            authIndex: "idx-1",
+            upstreamProvider: "xai",
+            model: "grok-3-mini",
+            alias: "grok-3-mini",
+            tokens: CLIProxyAPISpendTokenMix(inputTokens: 100_000, outputTokens: 100_000, totalTokens: 200_000),
+            failed: false,
+            statusCode: 200)
+        #expect(abs((CLIProxyAPISpendAggregator.listPriceUSD(event: mini, customPricing: .empty) ?? -1) - 0.08) < 1e-9)
+
+        let flash = CLIProxyAPISpendEvent(
+            requestID: "flash",
+            occurredAt: now,
+            authIndex: "idx-1",
+            upstreamProvider: "deepseek",
+            model: "deepseek-v4-flash",
+            alias: "deepseek-v4-flash",
+            tokens: CLIProxyAPISpendTokenMix(inputTokens: 1_000_000, outputTokens: 1_000_000, totalTokens: 2_000_000),
+            failed: false,
+            statusCode: 200)
+        #expect(
+            abs((CLIProxyAPISpendAggregator.listPriceUSD(event: flash, customPricing: .empty) ?? -1) - 0.42) < 1e-9)
+
+        let sol = CLIProxyAPISpendEvent(
+            requestID: "sol",
+            occurredAt: now,
+            authIndex: "idx-1",
+            upstreamProvider: "openai",
+            model: "gpt-5.6-sol",
+            alias: "gpt-5.6-sol",
+            tokens: CLIProxyAPISpendTokenMix(inputTokens: 100_000, outputTokens: 10_000, totalTokens: 110_000),
+            failed: false,
+            statusCode: 200)
+        #expect(
+            abs((CLIProxyAPISpendAggregator.listPriceUSD(event: sol, customPricing: .empty) ?? -1) - 0.8) < 1e-9)
+    }
+
     private static func settings() throws -> CLIProxyAPISettings {
         try CLIProxyAPISettings(
             baseURL: #require(URL(string: "http://127.0.0.1:8317")),

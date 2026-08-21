@@ -1550,6 +1550,14 @@ extension UsageStore {
             self.lastTokenFetchScope[provider.instanceID] = completedCostScopeSignature
             self.startCodexCostCatchUpIfNeeded(afterRefreshing: provider)
 
+            if provider == .cliproxyapi {
+                self.publishTokenSnapshot(snapshot, for: provider)
+                self.tokenErrors[provider.instanceID] = Self.cliproxyapiTokenError(from: snapshot)
+                self.tokenFailureGates[provider.instanceID]?.recordSuccess()
+                self.persistWidgetSnapshot(reason: "token-usage")
+                return
+            }
+
             guard !snapshot.daily.isEmpty || snapshot.meteredCostUSD != nil else {
                 self.publishConfirmedEmptyTokenSnapshot(for: provider)
                 self.tokenErrors[provider.instanceID] = Self.tokenCostNoDataMessage(for: provider)

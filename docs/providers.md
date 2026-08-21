@@ -27,7 +27,9 @@ unless a source also reports plan-metered spend, in which case both columns appe
 timezone stored when cost tracking is first enabled.
 
 Native cost-history sources are the descriptors that advertise token-cost support: Codex, Claude, OpenAI Admin,
-Mistral, AWS Bedrock, Vertex AI, Cursor, and OpenCode Go. Providers without that contract are omitted instead of
+Mistral, AWS Bedrock, Vertex AI, Cursor, OpenCode Go, OpenRouter, and CLIProxyAPI. CLIProxyAPI spend is an opt-in
+proxy-observed list-price estimate (Track CLIProxyAPI spend + CPA `usage-statistics-enabled`); it stays on its own
+row and is excluded from billed Codex/Claude totals. Providers without that contract are omitted instead of
 appearing as empty subscriptions. Each native currency has its own total, ranking, and daily chart; CodexBar never
 adds or ranks amounts across currencies.
 
@@ -546,6 +548,7 @@ JavaScriptCore is the macOS rollback engine. The committed `.js` is generated fr
 - Management key from config `apiKey` or `CLIPROXYAPI_MANAGEMENT_KEY`; optional base URL from `enterpriseHost` or `CLIPROXYAPI_BASE_URL` (default `http://127.0.0.1:8317`).
 - Optional `workspaceID` / `CLIPROXYAPI_AUTH_INDEX` limits refresh to one credential.
 - Lists `/v0/management/auth-files`, then uses `/v0/management/api-call` to fetch Codex `wham/usage`, Gemini/Antigravity `retrieveUserQuota`, and Grok weekly credits.
+- Optional spend tracking (config `extrasEnabled` / `CLIPROXYAPI_SPEND_TRACKING`) pops `/v0/management/usage-queue` every 5s. Requires CLIProxyAPI `usage-statistics-enabled: true` (defaults false).
 - Primary window is the highest used session/Pro lane among those accounts; extra rows name each account.
 - Status: none yet.
 - Details: `docs/cliproxyapi.md`.

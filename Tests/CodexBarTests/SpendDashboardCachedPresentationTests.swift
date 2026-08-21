@@ -12,6 +12,29 @@ struct SpendDashboardCachedPresentationTests {
     }
 
     @Test
+    func `cliproxyapi historyLabel surfaces on provider row`() {
+        let snapshot = CLIProxyAPISpendSnapshot.emptySnapshot(
+            now: Date(timeIntervalSince1970: 1_787_212_800),
+            historyDays: 30,
+            calendar: Calendar(identifier: .gregorian),
+            label: CLIProxyAPISpendError.usageStatisticsDisabled.errorDescription,
+            fingerprint: nil,
+            historyCoverageIsEstablished: false)
+        let model = SpendDashboardModel.build(
+            inputs: [
+                .init(
+                    id: "cliproxyapi",
+                    provider: .cliproxyapi,
+                    displayName: "CLIProxyAPI",
+                    snapshot: snapshot),
+            ],
+            requestedDays: 30,
+            now: Date(timeIntervalSince1970: 1_787_212_800))
+        #expect(model.groups.first?.providers.first?.statusText
+            == CLIProxyAPISpendError.usageStatisticsDisabled.errorDescription)
+    }
+
+    @Test
     func `production loader reads a validated scoped account report`() async throws {
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }

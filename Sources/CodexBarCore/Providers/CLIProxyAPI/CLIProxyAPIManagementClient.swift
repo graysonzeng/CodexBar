@@ -112,7 +112,7 @@ public struct CLIProxyAPIManagementClient: Sendable {
         "User-Agent": "grok-pager/0.2.91 grok-shell/0.2.91 (macos; aarch64)",
     ]
 
-    private let settings: CLIProxyAPISettings
+    public let settings: CLIProxyAPISettings
     private let transport: any ProviderHTTPTransport
 
     public init(
@@ -121,6 +121,39 @@ public struct CLIProxyAPIManagementClient: Sendable {
     {
         self.settings = settings
         self.transport = transport
+    }
+
+    public struct UsageQueuePage: Sendable, Equatable {
+        public let events: [CLIProxyAPISpendEvent]
+        public let skipped: Int
+        public let rawBody: Data
+
+        public init(events: [CLIProxyAPISpendEvent], skipped: Int, rawBody: Data) {
+            self.events = events
+            self.skipped = skipped
+            self.rawBody = rawBody
+        }
+    }
+
+    public func usageStatisticsEnabled() async throws -> Bool {
+        let (data, statusCode) = try await self.request(
+            path: "usage-statistics-enabled",
+            method: "GET",
+            body: nil)
+        try self.throwIfManagementFailed(statusCode: statusCode, data: data)
+        return try CLIProxyAPIUsageStatisticsFlagDecoder.enabled(from: data)
+    }
+
+    public func popUsageQueue(count: Int = CLIProxyAPISpendCollector.defaultPageSize) async throws -> UsageQueuePage {
+        let clamped = max(2, count)
+        let (data, statusCode) = try await self.request(
+            path: "usage-queue",
+            method: "GET",
+            queryItems: [URLQueryItem(name: "count", value: String(clamped))],
+            body: nil)
+        try self.throwIfManagementFailed(statusCode: statusCode, data: data)
+        let decoded = try CLIProxyAPISpendQueueDecoder.events(from: data)
+        return UsageQueuePage(events: decoded.events, skipped: decoded.skipped, rawBody: data)
     }
 
     public func listAuths() async throws -> [CLIProxyAPIResolvedAuth] {
@@ -191,7 +224,11 @@ public struct CLIProxyAPIManagementClient: Sendable {
         }
     }
 
-    public static func managementURL(baseURL: URL, path: String) -> URL? {
+    public static func managementURL(
+        baseURL: URL,
+        path: String,
+        queryItems: [URLQueryItem] = []) -> URL?
+    {
         let trimmedPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
         var normalized = baseURL
         let existing = normalized.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
@@ -199,7 +236,13 @@ public struct CLIProxyAPIManagementClient: Sendable {
             normalized.appendPathComponent("v0", isDirectory: false)
             normalized.appendPathComponent("management", isDirectory: false)
         }
-        return normalized.appendingPathComponent(trimmedPath)
+        let withPath = normalized.appendingPathComponent(trimmedPath)
+        guard !queryItems.isEmpty else { return withPath }
+        guard var components = URLComponents(url: withPath, resolvingAgainstBaseURL: false) else {
+            return withPath
+        }
+        components.queryItems = queryItems
+        return components.url
     }
 
     private func fetchGeminiLikeQuota(
@@ -312,8 +355,13 @@ public struct CLIProxyAPIManagementClient: Sendable {
         return Data(bodyString.utf8)
     }
 
-    private func request(path: String, method: String, body: Data?) async throws -> (Data, Int) {
-        guard let url = Self.managementURL(baseURL: self.settings.baseURL, path: path) else {
+    private func request(
+        path: String,
+        method: String,
+        queryItems: [URLQueryItem] = [],
+        body: Data?) async throws -> (Data, Int)
+    {
+        guard let url = Self.managementURL(baseURL: self.settings.baseURL, path: path, queryItems: queryItems) else {
             throw CLIProxyAPIError.invalidURL
         }
         var request = URLRequest(url: url)
@@ -327,6 +375,17 @@ public struct CLIProxyAPIManagementClient: Sendable {
         }
         let response = try await self.transport.response(for: request)
         return (response.data, response.statusCode)
+    }
+
+    private func throwIfManagementFailed(statusCode: Int, data: Data) throws {
+        if statusCode == 401 || statusCode == 403 {
+            throw CLIProxyAPISpendError.unauthorized
+        }
+        guard (200..<300).contains(statusCode) else {
+            throw CLIProxyAPIError.managementRequestFailed(
+                statusCode,
+                String(data: data, encoding: .utf8))
+        }
     }
 
     private func mapResolvedAuth(_ auth: AuthFileEntry) -> CLIProxyAPIResolvedAuth? {

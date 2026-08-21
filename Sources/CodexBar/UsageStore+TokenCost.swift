@@ -54,9 +54,8 @@ extension UsageStore {
 
         let fetcher = self.costUsageFetcher
         let timeoutSeconds = self.tokenFetchTimeout
-        // Provider-specific by design: the Codex ledger owns pricing refresh while Bedrock resolves AWS environment.
         let allowPricingRefresh = provider != .codex || !self.settings.codexLocalSessionCostLedgerEnabled
-        let environment = provider == .bedrock
+        let environment = (provider == .bedrock || provider == .cliproxyapi)
             ? ProviderRegistry.makeEnvironment(
                 base: self.environmentBase,
                 provider: provider,
@@ -520,5 +519,13 @@ extension UsageStore {
 
     nonisolated static func tokenCostNoDataMessage(for provider: UsageProvider) -> String {
         ProviderDescriptorRegistry.descriptor(for: provider).tokenCost.noDataMessage()
+    }
+
+    nonisolated static func cliproxyapiTokenError(from snapshot: CostUsageTokenSnapshot) -> String? {
+        let label = snapshot.historyLabel
+        if label == nil || label == CLIProxyAPISpendSnapshot.observedDisclaimer {
+            return snapshot.daily.isEmpty ? Self.tokenCostNoDataMessage(for: .cliproxyapi) : nil
+        }
+        return label
     }
 }

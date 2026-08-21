@@ -7,6 +7,12 @@ public enum CLIProxyAPIProviderDescriptor {
         additionalProjections: [
             .enterpriseHost(CLIProxyAPISettingsReader.baseURLEnvironmentKey),
             .workspaceID(CLIProxyAPISettingsReader.authIndexEnvironmentKey),
+            ProviderCredentialEnvironmentProjection(
+                key: CLIProxyAPISettingsReader.spendTrackingEnvironmentKey,
+                value: { config in
+                    guard let extrasEnabled = config.extrasEnabled else { return nil }
+                    return extrasEnabled ? "1" : "0"
+                }),
         ],
         resolve: CLIProxyAPISettingsReader.apiKey,
         configValidator: { config in
@@ -64,8 +70,14 @@ public enum CLIProxyAPIProviderDescriptor {
                     ProviderColor(hex: 0x4285F4),
                 ]),
             tokenCost: ProviderTokenCostConfig(
-                supportsTokenCost: false,
-                noDataMessage: { "CLIProxyAPI cost history is not tracked in this provider." }),
+                supportsTokenCost: true,
+                noDataMessage: {
+                    "No CLIProxyAPI spend data yet. Enable Track CLIProxyAPI spend, and set "
+                        + "usage-statistics-enabled: true in CLIProxyAPI (it defaults to false)."
+                },
+                menuHintLines: [.literal("Observed by CLIProxyAPI, not a bill")],
+                supportsTokenSnapshot: true,
+                estimateDisclaimer: "Observed by CLIProxyAPI, not a bill"),
             fetchPlan: ProviderFetchPlan(
                 sourceModes: [.auto, .api],
                 pipeline: ProviderFetchPipeline(resolveStrategies: { _ in [CLIProxyAPIFetchStrategy()] })),

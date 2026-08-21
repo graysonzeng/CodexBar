@@ -1,5 +1,6 @@
 import CodexBarCore
 import Foundation
+import SwiftUI
 
 struct CLIProxyAPIProviderImplementation: ProviderImplementation {
     let id: UsageProvider = .cliproxyapi
@@ -14,11 +15,38 @@ struct CLIProxyAPIProviderImplementation: ProviderImplementation {
         _ = settings[providerConfig: .cliproxyapi, field: .apiKey]
         _ = settings[providerConfig: .cliproxyapi, field: .endpoint]
         _ = settings[providerConfig: .cliproxyapi, field: .workspace]
+        _ = settings.cliproxyapiSpendTrackingEnabled
     }
 
     @MainActor
     func isAvailable(context: ProviderAvailabilityContext) -> Bool {
         CLIProxyAPISettingsReader.apiKey(environment: context.environment) != nil
+    }
+
+    func makeRuntime() -> (any ProviderRuntime)? {
+        CLIProxyAPIProviderRuntime()
+    }
+
+    @MainActor
+    func settingsToggles(context: ProviderSettingsContext) -> [ProviderSettingsToggleDescriptor] {
+        [
+            ProviderSettingsToggleDescriptor(
+                id: "cliproxyapi-spend-tracking",
+                title: "Track CLIProxyAPI spend",
+                subtitle: [
+                    "Pops GET /v0/management/usage-queue every 5s and stores local cost history.",
+                    "CLIProxyAPI usage-statistics-enabled defaults to false; set it true or the queue stays empty.",
+                    "Do not also run CPA-Manager as a consumer of the same queue.",
+                ].joined(separator: " "),
+                binding: context.boolBinding(\.cliproxyapiSpendTrackingEnabled),
+                statusText: nil,
+                actions: [],
+                isVisible: nil,
+                isEnabled: nil,
+                onChange: nil,
+                onAppDidBecomeActive: nil,
+                onAppearWhenEnabled: nil),
+        ]
     }
 
     @MainActor

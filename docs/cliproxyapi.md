@@ -47,9 +47,18 @@ link-local, and IPv6 unique-local networks.
 - Secondary: highest used weekly/Flash window when present.
 - Extra rows: one named window per account (`Codex`, `Antigravity`, `Grok`). Account emails stay off the menu.
 
+## Spend tracking
+
+- Off by default. Enable **Track CLIProxyAPI spend** in Providers, or set `CLIPROXYAPI_SPEND_TRACKING=1`.
+- CLIProxyAPI `usage-statistics-enabled` also defaults to **false**. Set it `true` in the proxy config or the queue never fills.
+- CodexBar pops `GET /v0/management/usage-queue?count=200` every 5s while the provider is enabled. GET is destructive; there is no ack. Do not also run CPA-Manager as a consumer of the same queue.
+- Events persist under `Application Support/CodexBar/cliproxyapi-spend/cliproxyapi-spend.sqlite`. Usage & Spend shows an observed-cost row that is **not** added to billed Codex/Claude totals.
+- `api_key` from queue records is discarded after decode.
+
 GitHub Copilot and other CLIProxyAPI auth types are listed by the management API but are not probed.
 
 ## Notes
 
 CLIProxyAPI itself does not store 5-hour/weekly remaining percent. CodexBar asks it to call upstream usage APIs with
 the stored credential (`POST /v0/management/api-call`). The management key is required even on localhost.
+Spend history is a local list-price estimate of requests the proxy observed, not a vendor bill.

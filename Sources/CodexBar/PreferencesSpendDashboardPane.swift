@@ -650,23 +650,32 @@ private struct SpendProviderPanel: View {
                     if row.rank > 1 {
                         Divider()
                     }
-                    HStack(spacing: 10) {
-                        Text(spendDashboardRankText(row.rank))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.tertiary)
-                            .frame(width: 26, alignment: .leading)
-                        SpendProviderIcon(provider: row.provider, sourceKind: row.sourceKind)
-                        Text(row.displayName).lineLimit(1)
-                        Spacer()
-                        Text(
-                            row.totalCost == nil && row.totalTokens == nil
-                                ? L("Spend unavailable")
-                                : spendDashboardMetricText(
-                                    cost: row.totalCost,
-                                    tokens: row.totalTokens,
-                                    currencyCode: self.group.currencyCode))
-                            .foregroundStyle(row.totalCost == nil && row.totalTokens == nil ? .secondary : .primary)
-                            .monospacedDigit()
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 10) {
+                            Text(spendDashboardRankText(row.rank))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.tertiary)
+                                .frame(width: 26, alignment: .leading)
+                            SpendProviderIcon(provider: row.provider, sourceKind: row.sourceKind)
+                            Text(row.displayName).lineLimit(1)
+                            Spacer()
+                            Text(
+                                row.totalCost == nil && row.totalTokens == nil
+                                    ? L("Spend unavailable")
+                                    : spendDashboardMetricText(
+                                        cost: row.totalCost,
+                                        tokens: row.totalTokens,
+                                        currencyCode: self.group.currencyCode))
+                                .foregroundStyle(row.totalCost == nil && row.totalTokens == nil ? .secondary : .primary)
+                                .monospacedDigit()
+                        }
+                        if let statusText = row.statusText {
+                            Text(statusText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.leading, 36)
+                        }
                     }
                     .padding(.vertical, 9)
                 }

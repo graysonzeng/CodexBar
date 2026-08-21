@@ -52,6 +52,7 @@ struct SpendDashboardModel: Equatable, Sendable {
         let totalCost: Double?
         let coveredDayCount: Int
         let sourceKind: SourceKind
+        let statusText: String?
 
         init(
             id: String,
@@ -61,7 +62,8 @@ struct SpendDashboardModel: Equatable, Sendable {
             totalTokens: Int?,
             totalCost: Double?,
             coveredDayCount: Int,
-            sourceKind: SourceKind = .native)
+            sourceKind: SourceKind = .native,
+            statusText: String? = nil)
         {
             self.id = id
             self.rank = rank
@@ -71,6 +73,7 @@ struct SpendDashboardModel: Equatable, Sendable {
             self.totalCost = totalCost
             self.coveredDayCount = coveredDayCount
             self.sourceKind = sourceKind
+            self.statusText = statusText
         }
     }
 
@@ -500,14 +503,15 @@ struct SpendDashboardModel: Equatable, Sendable {
             selectedDay: selectedDay,
             bounds: bounds,
             calendar: calendar)
+        let billedProviders = providers.filter { $0.provider != .cliproxyapi }
         return CurrencyGroup(
             currencyCode: currencyCode,
             providers: providers,
             models: modelSummary.rows,
             projects: Self.projectRows(summaries: summaries, bounds: bounds, calendar: calendar),
             dailyPoints: dailyPoints,
-            totalTokens: Self.knownIntSum(providers.map(\.totalTokens)),
-            totalCost: Self.knownCostSum(providers.map(\.totalCost)),
+            totalTokens: Self.knownIntSum(billedProviders.map(\.totalTokens)),
+            totalCost: Self.knownCostSum(billedProviders.map(\.totalCost)),
             coveredDayCount: Self.commonCoverageDayCount(summaries: summaries, calendar: calendar),
             chartDomain: Self.chartDomain(bounds: bounds, calendar: calendar),
             modelHistoryCompleteness: modelHistoryCompleteness,
@@ -621,8 +625,16 @@ struct SpendDashboardModel: Equatable, Sendable {
                     totalTokens: entry.element.totalTokens,
                     totalCost: entry.element.totalCost,
                     coveredDayCount: entry.element.coveredDayCount,
-                    sourceKind: entry.element.input.sourceKind)
+                    sourceKind: entry.element.input.sourceKind,
+                    statusText: Self.statusText(for: entry.element.input))
             }
+    }
+
+    private static func statusText(for input: ProviderInput) -> String? {
+        guard input.provider == .cliproxyapi else { return nil }
+        let label = input.snapshot.historyLabel
+        guard let label, label != CLIProxyAPISpendSnapshot.observedDisclaimer else { return nil }
+        return label
     }
 
     /// Rolls per-project daily entries up to window-scoped rows, mirroring the proven-zero

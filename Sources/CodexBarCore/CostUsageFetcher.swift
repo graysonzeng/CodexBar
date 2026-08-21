@@ -424,13 +424,15 @@ public struct CostUsageFetcher: Sendable {
         }
 
         let clampedHistoryDays = max(1, min(365, historyDays))
+        let remoteCalendar = overrideScannerOptions?.calendar ?? .current
 
         if let remoteSnapshot = try await self.loadRemoteTokenSnapshot(
             provider: provider,
             environment: environment,
             now: now,
             historyDays: clampedHistoryDays,
-            cursorCookieHeaderOverride: cursorCookieHeaderOverride)
+            cursorCookieHeaderOverride: cursorCookieHeaderOverride,
+            calendar: remoteCalendar)
         {
             return remoteSnapshot
         }
@@ -1572,10 +1574,19 @@ extension CostUsageFetcher {
         environment: [String: String],
         now: Date,
         historyDays: Int,
-        cursorCookieHeaderOverride: String?) async throws -> CostUsageTokenSnapshot?
+        cursorCookieHeaderOverride: String?,
+        calendar: Calendar = .current) async throws -> CostUsageTokenSnapshot?
     {
+        if provider == .cliproxyapi {
+            return try await CLIProxyAPISpendSnapshot.load(
+                environment: environment,
+                now: now,
+                historyDays: historyDays,
+                calendar: calendar)
+        }
+
         // Provider-specific by design: Bedrock uses AWS billing while Cursor uses its macOS dashboard session.
-        let since = Calendar.current.date(byAdding: .day, value: -(historyDays - 1), to: now) ?? now
+        let since = calendar.date(byAdding: .day, value: -(historyDays - 1), to: now) ?? now
         if provider == .bedrock {
             let daily = try await Self.loadBedrockDailyReport(
                 environment: environment,
@@ -1586,6 +1597,7 @@ extension CostUsageFetcher {
                 now: now,
                 historyDays: historyDays,
                 useCurrentLocalDayForSession: false,
+                calendar: calendar,
                 costProvenance: .vendorMetered)
         }
 

@@ -19,11 +19,18 @@ public struct CLIProxyAPISettings: Sendable, Equatable {
     public let baseURL: URL
     public let managementKey: String
     public let authIndex: String?
+    public let spendTrackingEnabled: Bool
 
-    public init(baseURL: URL, managementKey: String, authIndex: String?) {
+    public init(
+        baseURL: URL,
+        managementKey: String,
+        authIndex: String?,
+        spendTrackingEnabled: Bool = false)
+    {
         self.baseURL = baseURL
         self.managementKey = managementKey
         self.authIndex = authIndex
+        self.spendTrackingEnabled = spendTrackingEnabled
     }
 }
 
@@ -31,6 +38,7 @@ public enum CLIProxyAPISettingsReader {
     public static let apiKeyEnvironmentKey = "CLIPROXYAPI_MANAGEMENT_KEY"
     public static let baseURLEnvironmentKey = "CLIPROXYAPI_BASE_URL"
     public static let authIndexEnvironmentKey = "CLIPROXYAPI_AUTH_INDEX"
+    public static let spendTrackingEnvironmentKey = "CLIPROXYAPI_SPEND_TRACKING"
     public static let defaultBaseURL = URL(string: "http://127.0.0.1:8317")!
 
     public static func apiKey(
@@ -43,6 +51,13 @@ public enum CLIProxyAPISettingsReader {
         environment: [String: String] = ProcessInfo.processInfo.environment) -> String?
     {
         self.cleaned(environment[self.authIndexEnvironmentKey])
+    }
+
+    public static func spendTrackingEnabled(
+        environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool
+    {
+        guard let raw = self.cleaned(environment[self.spendTrackingEnvironmentKey]) else { return false }
+        return ["1", "true", "yes", "on"].contains(raw.lowercased())
     }
 
     public static func hasBaseURLOverride(
@@ -72,7 +87,8 @@ public enum CLIProxyAPISettingsReader {
         return CLIProxyAPISettings(
             baseURL: baseURL,
             managementKey: managementKey,
-            authIndex: self.authIndex(environment: environment))
+            authIndex: self.authIndex(environment: environment),
+            spendTrackingEnabled: self.spendTrackingEnabled(environment: environment))
     }
 
     public static func validateEndpointOverride(

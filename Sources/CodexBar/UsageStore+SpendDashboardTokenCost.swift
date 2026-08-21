@@ -115,6 +115,10 @@ extension UsageStore {
             }
             self.lastSpendDashboardTokenFetchScope[provider.instanceID] = completedCostScopeSignature
 
+            if provider == .cliproxyapi {
+                self.publishSpendDashboardTokenSnapshot(snapshot, for: provider)
+                return
+            }
             guard !snapshot.daily.isEmpty || snapshot.meteredCostUSD != nil else {
                 self.publishSpendDashboardConfirmedEmptyTokenSnapshot(for: provider)
                 return
@@ -138,6 +142,17 @@ extension UsageStore {
                     provider: provider,
                     attemptedAt: now,
                     costScopeSignature: costScopeSignature)
+                return
+            }
+            if provider == .cliproxyapi {
+                let labeled = CLIProxyAPISpendSnapshot.emptySnapshot(
+                    now: now,
+                    historyDays: historyDays,
+                    calendar: Calendar.current,
+                    label: error.localizedDescription,
+                    fingerprint: nil,
+                    historyCoverageIsEstablished: false)
+                self.publishSpendDashboardTokenSnapshot(labeled, for: provider)
                 return
             }
             self.clearSpendDashboardTokenSnapshot(for: provider)

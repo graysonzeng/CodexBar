@@ -54,6 +54,8 @@ extension UsageStore {
 
         let fetcher = self.costUsageFetcher
         let timeoutSeconds = self.tokenFetchTimeout
+        // Provider-specific by design: Codex local ledger skips models.dev pricing refresh; Bedrock and CLIProxyAPI
+        // rebuild the fetch environment so AWS/gateway credentials are not inherited from process env.
         let allowPricingRefresh = provider != .codex || !self.settings.codexLocalSessionCostLedgerEnabled
         let environment = (provider == .bedrock || provider == .cliproxyapi)
             ? ProviderRegistry.makeEnvironment(
@@ -430,6 +432,7 @@ extension UsageStore {
         snapshot: CostUsageTokenSnapshot,
         includeSettingsRevision: Bool = true) -> String
     {
+        // Provider-specific by design: Cursor Auto replaces the provisional cookie scope with the fetched identity.
         guard provider == .cursor,
               self.settings.cursorCookieSource == .auto,
               let fingerprint = snapshot.credentialScopeFingerprint
@@ -521,6 +524,7 @@ extension UsageStore {
         ProviderDescriptorRegistry.descriptor(for: provider).tokenCost.noDataMessage()
     }
 
+    /// Provider-specific by design: CLIProxyAPI maps its queue-history disclaimer onto the shared token-error lane.
     nonisolated static func cliproxyapiTokenError(from snapshot: CostUsageTokenSnapshot) -> String? {
         let label = snapshot.historyLabel
         if label == nil || label == CLIProxyAPISpendSnapshot.observedDisclaimer {

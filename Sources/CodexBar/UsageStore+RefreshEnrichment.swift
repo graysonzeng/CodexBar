@@ -53,6 +53,13 @@ extension UsageStore {
         await self.runRefresh(
             enrichmentMode: enrichmentMode,
             startupConnectivityRetryAttempt: nil)
+        guard !Task.isCancelled else { return }
+        switch enrichmentMode {
+        case .forcedForeground, .forcedBackground:
+            await self.refreshCodexRadarIntelligence(force: true)
+        case .automatic:
+            break
+        }
     }
 
     func enqueueRequiredRefresh(

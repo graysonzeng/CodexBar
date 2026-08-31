@@ -1577,6 +1577,8 @@ extension CostUsageFetcher {
         cursorCookieHeaderOverride: String?,
         calendar: Calendar = .current) async throws -> CostUsageTokenSnapshot?
     {
+        // Provider-specific by design: CLIProxyAPI remote spend is a gateway usage dump; Bedrock uses AWS Cost Explorer
+        // billing rather than local transcripts.
         if provider == .cliproxyapi {
             return try await CLIProxyAPISpendSnapshot.load(
                 environment: environment,

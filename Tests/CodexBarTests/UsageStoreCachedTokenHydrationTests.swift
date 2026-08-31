@@ -26,6 +26,7 @@ struct UsageStoreCachedTokenHydrationTests {
             provider: .codex,
             now: day,
             historyDays: 1,
+            includePiSessions: false,
             scannerOptions: options)
 
         let settings = Self.makeCodexOnlySettings(historyDays: 1)
@@ -66,6 +67,7 @@ struct UsageStoreCachedTokenHydrationTests {
             provider: .codex,
             now: day,
             historyDays: 1,
+            includePiSessions: false,
             scannerOptions: options)
 
         let settings = Self.makeCodexOnlySettings(historyDays: 1)
@@ -116,6 +118,7 @@ struct UsageStoreCachedTokenHydrationTests {
             provider: .codex,
             now: now,
             historyDays: 1,
+            includePiSessions: false,
             scannerOptions: options)
 
         let settings = Self.makeCodexOnlySettings(historyDays: 1)
@@ -159,6 +162,7 @@ struct UsageStoreCachedTokenHydrationTests {
             provider: .codex,
             now: now,
             historyDays: 1,
+            includePiSessions: false,
             scannerOptions: options)
         var cache = CostUsageStoreAccess.read(cacheRoot: env.cacheRoot)
         cache.lastScanUnixMs = Int64(now.addingTimeInterval(-2 * 60 * 60).timeIntervalSince1970 * 1000)

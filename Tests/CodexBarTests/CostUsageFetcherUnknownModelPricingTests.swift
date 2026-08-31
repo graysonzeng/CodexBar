@@ -15,6 +15,7 @@ struct CostUsageFetcherUnknownModelPricingTests {
             provider: .codex,
             now: fixture.day,
             refreshPricingInBackground: false,
+            includePiSessions: false,
             scannerOptions: fixture.options,
             modelsDevClient: ModelsDevClient(transport: CostUsageFetcherModelsDevTransport(
                 data: fixture.refreshedCatalog)))
@@ -56,6 +57,7 @@ struct CostUsageFetcherUnknownModelPricingTests {
             provider: .codex,
             now: fixture.day,
             refreshPricingInBackground: false,
+            includePiSessions: false,
             scannerOptions: fixture.options,
             modelsDevClient: ModelsDevClient(transport: CostUsageFetcherModelsDevTransport(
                 data: fixture.refreshedCatalog)))
@@ -90,6 +92,7 @@ struct CostUsageFetcherUnknownModelPricingTests {
             provider: .claude,
             now: fixture.day,
             refreshPricingInBackground: false,
+            includePiSessions: false,
             scannerOptions: fixture.options,
             modelsDevClient: ModelsDevClient(transport: CostUsageFetcherModelsDevTransport(
                 data: fixture.refreshedCatalog)))
@@ -147,6 +150,7 @@ struct CostUsageFetcherUnknownModelPricingTests {
                 provider: .codex,
                 now: fixture.day,
                 refreshPricingInBackground: true,
+                includePiSessions: false,
                 scannerOptions: fixture.options,
                 modelsDevClient: ModelsDevClient(transport: CostUsageFetcherGatedModelsDevTransport(
                     data: fixture.refreshedCatalog,
@@ -231,6 +235,7 @@ struct CostUsageFetcherUnknownModelPricingTests {
             provider: .codex,
             now: day,
             refreshPricingInBackground: false,
+            includePiSessions: false,
             scannerOptions: options,
             modelsDevClient: ModelsDevClient(transport: CostUsageFetcherCountingModelsDevTransport(counter: counter)))
 
@@ -253,6 +258,7 @@ struct CostUsageFetcherUnknownModelPricingTests {
             now: fixture.day,
             allowPricingRefresh: false,
             refreshPricingInBackground: false,
+            includePiSessions: false,
             scannerOptions: fixture.options,
             modelsDevClient: ModelsDevClient(
                 transport: CostUsageFetcherCountingModelsDevTransport(counter: counter)))

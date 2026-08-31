@@ -21,7 +21,7 @@ public struct CLIProxyAPISpendCollectorTick: Sendable, Equatable {
 public struct CLIProxyAPISpendCollector: Sendable {
     public static let defaultPageSize = 200
     public static let defaultMaxPagesPerTick = 50
-    public static let defaultMaxEventsPerTick = 10_000
+    public static let defaultMaxEventsPerTick = 10000
     public static let tickInterval: Duration = .seconds(5)
 
     private let client: CLIProxyAPIManagementClient

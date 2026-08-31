@@ -1,0 +1,81 @@
+{
+  "schema": 3,
+  "mode": "equal_latest_3",
+  "benchmark_id": "deep-swe",
+  "scoring_mode": "binary-majority",
+  "score_label": "Pass rate",
+  "source_updated_at": "2026-08-30T17:38:19+00:00",
+  "runs_24h_total": 960,
+  "points": [
+    {
+      "model": "dsh-deepseek-v4-pro",
+      "effort": "max",
+      "iq": 1.0,
+      "average_minutes": 2.0,
+      "passed": 1,
+      "total": 150,
+      "average_price_usd": 0.01,
+      "source_updated_at": "2026-08-29T00:00:00+00:00"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "iq": 93.3,
+      "average_minutes": 16.16,
+      "passed": 209,
+      "total": 336,
+      "average_price_usd": 1.23,
+      "source_updated_at": "2026-08-30T13:52:14+00:00"
+    },
+    {
+      "model": "dsh-deepseek-v4-flash",
+      "effort": "max",
+      "iq": 3.0,
+      "average_minutes": 4.0,
+      "passed": 2,
+      "total": 150,
+      "average_price_usd": 0.02,
+      "source_updated_at": "2026-08-28T00:00:00+00:00"
+    },
+    {
+      "model": "deepseek-v4-pro",
+      "effort": "max",
+      "iq": 87.1,
+      "average_minutes": 42.41,
+      "passed": 90,
+      "total": 155,
+      "average_price_usd": 2.34,
+      "source_updated_at": "2026-08-29T00:35:55+00:00"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh",
+      "iq": 100.45,
+      "average_minutes": 24.37,
+      "passed": 225,
+      "total": 336,
+      "average_price_usd": 3.45,
+      "source_updated_at": "2026-08-30T16:50:10+00:00"
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "effort": "max",
+      "iq": 86.16,
+      "average_minutes": 31.39,
+      "passed": 193,
+      "total": 336,
+      "average_price_usd": 0.56,
+      "source_updated_at": "2026-08-28T23:58:49+00:00"
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "iq": 98.21,
+      "average_minutes": 19.82,
+      "passed": 220,
+      "total": 336,
+      "average_price_usd": 2.22,
+      "source_updated_at": "2026-08-30T14:34:01+00:00"
+    }
+  ]
+}

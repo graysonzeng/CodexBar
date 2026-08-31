@@ -188,20 +188,20 @@ public enum CLIProxyAPISpendQueueDecoder {
             basic.formatOptions = [.withInternetDateTime]
             if let date = basic.date(from: value) { return date }
             if let interval = Double(value) {
-                return Date(timeIntervalSince1970: interval > 10_000_000_000 ? interval / 1_000 : interval)
+                return Date(timeIntervalSince1970: interval > 10_000_000_000 ? interval / 1000 : interval)
             }
             return nil
         }
         if let value = raw as? Double {
-            return Date(timeIntervalSince1970: value > 10_000_000_000 ? value / 1_000 : value)
+            return Date(timeIntervalSince1970: value > 10_000_000_000 ? value / 1000 : value)
         }
         if let value = raw as? Int {
             let interval = Double(value)
-            return Date(timeIntervalSince1970: interval > 10_000_000_000 ? interval / 1_000 : interval)
+            return Date(timeIntervalSince1970: interval > 10_000_000_000 ? interval / 1000 : interval)
         }
         if let value = raw as? NSNumber {
             let interval = value.doubleValue
-            return Date(timeIntervalSince1970: interval > 10_000_000_000 ? interval / 1_000 : interval)
+            return Date(timeIntervalSince1970: interval > 10_000_000_000 ? interval / 1000 : interval)
         }
         return nil
     }

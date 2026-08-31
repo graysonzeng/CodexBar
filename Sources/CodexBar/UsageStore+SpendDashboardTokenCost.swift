@@ -115,6 +115,8 @@ extension UsageStore {
             }
             self.lastSpendDashboardTokenFetchScope[provider.instanceID] = completedCostScopeSignature
 
+            // Provider-specific by design: CLIProxyAPI publishes labeled spend snapshots even when daily rows are
+            // empty.
             if provider == .cliproxyapi {
                 self.publishSpendDashboardTokenSnapshot(snapshot, for: provider)
                 return
@@ -144,6 +146,8 @@ extension UsageStore {
                     costScopeSignature: costScopeSignature)
                 return
             }
+            // Provider-specific by design: CLIProxyAPI refresh failures keep a labeled empty snapshot instead of
+            // clearing token history.
             if provider == .cliproxyapi {
                 let labeled = CLIProxyAPISpendSnapshot.emptySnapshot(
                     now: now,

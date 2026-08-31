@@ -503,6 +503,8 @@ struct SpendDashboardModel: Equatable, Sendable {
             selectedDay: selectedDay,
             bounds: bounds,
             calendar: calendar)
+        // Provider-specific by design: CLIProxyAPI is a gateway overlay, so its rows are excluded from billed currency
+        // totals.
         let billedProviders = providers.filter { $0.provider != .cliproxyapi }
         let totalProviders = billedProviders.isEmpty ? providers : billedProviders
         return CurrencyGroup(
@@ -632,6 +634,7 @@ struct SpendDashboardModel: Equatable, Sendable {
     }
 
     private static func statusText(for input: ProviderInput) -> String? {
+        // Provider-specific by design: CLIProxyAPI status text is the labeled spend-snapshot history string.
         guard input.provider == .cliproxyapi else { return nil }
         let label = input.snapshot.historyLabel
         guard let label, label != CLIProxyAPISpendSnapshot.observedDisclaimer else { return nil }

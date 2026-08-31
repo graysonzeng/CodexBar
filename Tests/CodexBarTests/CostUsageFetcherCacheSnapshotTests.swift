@@ -248,6 +248,7 @@ struct CostUsageFetcherCacheSnapshotTests {
             provider: .codex,
             now: day,
             historyDays: 1,
+            includePiSessions: false,
             scannerOptions: options)
 
         let cached = await CostUsageFetcher.loadCachedCodexTokenSnapshot(
@@ -280,6 +281,7 @@ struct CostUsageFetcherCacheSnapshotTests {
             provider: .codex,
             now: day,
             historyDays: 1,
+            includePiSessions: false,
             scannerOptions: options)
 
         let cache = CostUsageStoreAccess.read(cacheRoot: env.cacheRoot)
@@ -452,6 +454,7 @@ struct CostUsageFetcherCacheSnapshotTests {
             provider: .codex,
             now: day,
             historyDays: 1,
+            includePiSessions: false,
             scannerOptions: options)
 
         let expanded = await CostUsageFetcher.loadCachedCodexTokenSnapshot(
@@ -488,6 +491,7 @@ struct CostUsageFetcherCacheSnapshotTests {
             provider: .codex,
             now: day,
             historyDays: 1,
+            includePiSessions: false,
             scannerOptions: options)
 
         let current = await CostUsageFetcher.loadCachedCodexTokenSnapshot(
@@ -528,6 +532,7 @@ struct CostUsageFetcherCacheSnapshotTests {
             provider: .codex,
             now: day,
             historyDays: 1,
+            includePiSessions: false,
             scannerOptions: options)
 
         var cache = CostUsageStoreAccess.read(cacheRoot: env.cacheRoot)
@@ -685,6 +690,7 @@ struct CostUsageFetcherCacheSnapshotTests {
             now: day,
             historyDays: 1,
             refreshPricingInBackground: false,
+            includePiSessions: false,
             scannerOptions: options)
 
         let fetcher = CostUsageFetcher(scannerOptions: options)

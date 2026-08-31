@@ -18,11 +18,12 @@ public enum CLIProxyAPISpendSnapshot {
         client: CLIProxyAPIManagementClient? = nil) async throws -> CostUsageTokenSnapshot
     {
         let resolvedStore = store ?? CLIProxyAPISpendStore(cacheRoot: CLIProxyAPISpendStore.defaultRootURL())
-        let fingerprint: String?
-        if let resolvedSettings = try? CLIProxyAPISettingsReader.resolve(environment: environment) {
-            fingerprint = Self.fingerprint(settings: resolvedSettings)
+        let fingerprint: String? = if let resolvedSettings = try? CLIProxyAPISettingsReader
+            .resolve(environment: environment)
+        {
+            Self.fingerprint(settings: resolvedSettings)
         } else {
-            fingerprint = nil
+            nil
         }
         let events: [CLIProxyAPISpendEvent]
         do {

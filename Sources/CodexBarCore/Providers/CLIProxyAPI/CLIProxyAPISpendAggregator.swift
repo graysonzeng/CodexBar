@@ -172,7 +172,10 @@ public enum CLIProxyAPISpendAggregator {
         }
 
         var model = day.models[event.model] ?? ModelAccumulator()
-        Self.merge(event, cost: event.failed ? nil : Self.listPriceUSD(event: event, customPricing: customPricing), into: &model)
+        Self.merge(
+            event,
+            cost: event.failed ? nil : Self.listPriceUSD(event: event, customPricing: customPricing),
+            into: &model)
         day.models[event.model] = model
     }
 
@@ -181,15 +184,15 @@ public enum CLIProxyAPISpendAggregator {
         into session: inout SessionAccumulator,
         customPricing: CostUsageCustomPricing)
     {
-        session.input = Self.add(session.input, event.tokens.inputTokens)
-        session.output = Self.add(session.output, event.tokens.outputTokens)
-        session.cacheRead = Self.add(session.cacheRead, event.tokens.cacheReadTokens)
-        session.reasoning = Self.add(session.reasoning, event.tokens.reasoningTokens)
-        session.tokens = Self.add(
+        session.input = self.add(session.input, event.tokens.inputTokens)
+        session.output = self.add(session.output, event.tokens.outputTokens)
+        session.cacheRead = self.add(session.cacheRead, event.tokens.cacheReadTokens)
+        session.reasoning = self.add(session.reasoning, event.tokens.reasoningTokens)
+        session.tokens = self.add(
             session.tokens,
-            event.tokens.totalTokens ?? Self.inferredTotal(event.tokens))
-        if !event.failed, let cost = Self.listPriceUSD(event: event, customPricing: customPricing) {
-            session.cost = Self.add(session.cost, cost)
+            event.tokens.totalTokens ?? self.inferredTotal(event.tokens))
+        if !event.failed, let cost = listPriceUSD(event: event, customPricing: customPricing) {
+            session.cost = self.add(session.cost, cost)
         }
         var model = session.models[event.model] ?? ModelAccumulator()
         Self.merge(
@@ -204,12 +207,12 @@ public enum CLIProxyAPISpendAggregator {
         cost: Double?,
         into model: inout ModelAccumulator)
     {
-        model.input = Self.add(model.input, event.tokens.inputTokens)
-        model.output = Self.add(model.output, event.tokens.outputTokens)
-        model.cacheRead = Self.add(model.cacheRead, event.tokens.cacheReadTokens)
-        model.cacheCreation = Self.add(model.cacheCreation, event.tokens.cacheCreationTokens)
-        model.reasoning = Self.add(model.reasoning, event.tokens.reasoningTokens)
-        if let tokens = event.tokens.totalTokens ?? Self.inferredTotal(event.tokens) {
+        model.input = self.add(model.input, event.tokens.inputTokens)
+        model.output = self.add(model.output, event.tokens.outputTokens)
+        model.cacheRead = self.add(model.cacheRead, event.tokens.cacheReadTokens)
+        model.cacheCreation = self.add(model.cacheCreation, event.tokens.cacheCreationTokens)
+        model.reasoning = self.add(model.reasoning, event.tokens.reasoningTokens)
+        if let tokens = event.tokens.totalTokens ?? inferredTotal(event.tokens) {
             model.tokens += tokens
             model.sawTokens = true
         }
@@ -303,10 +306,6 @@ public enum CLIProxyAPISpendAggregator {
         }
         if let cost = Self.modelsDevCostUSD(
             event: event,
-            input: input,
-            output: output,
-            cacheRead: cacheRead,
-            cacheWrite: cacheWrite,
             catalog: modelsDevCatalog,
             cacheRoot: modelsDevCacheRoot)
         {
@@ -362,13 +361,14 @@ public enum CLIProxyAPISpendAggregator {
     {
         let model = CostUsageCustomPricing.normalizeKey(event.model)
         let native = model.split(separator: "/").last.map(String.init) ?? model
-        let rates: CostUsageCustomPricing.Rates?
-        if native.contains("deepseek-v4-flash") || native == "deepseek-chat" || native == "deepseek-reasoner" {
-            rates = .init(input: 0.14, output: 0.28, cacheRead: 0.0028)
+        let rates: CostUsageCustomPricing.Rates? = if native
+            .contains("deepseek-v4-flash") || native == "deepseek-chat" || native == "deepseek-reasoner"
+        {
+            .init(input: 0.14, output: 0.28, cacheRead: 0.0028)
         } else if native == "gpt-5.6-sol" || native == "gpt-5.6" {
-            rates = .init(input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25)
+            .init(input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25)
         } else {
-            rates = nil
+            nil
         }
         guard let rates else { return nil }
         return CostUsageCustomPricing.costUSD(
@@ -388,6 +388,8 @@ public enum CLIProxyAPISpendAggregator {
     {
         let upstream = event.upstreamProvider.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let model = CostUsageCustomPricing.normalizeKey(event.model)
+        // Provider-specific by design: CLIProxyAPI xAI events arrive as upstream "xai"/"grok" aliases or grok-prefixed
+        // model IDs.
         guard upstream == "xai" || upstream == "grok" || model.hasPrefix("grok") else { return nil }
         guard var rates = Self.xaiRates(for: model) else { return nil }
         if input >= 200_000, Self.xaiUsesLongContextRates(for: model) {
@@ -417,6 +419,7 @@ public enum CLIProxyAPISpendAggregator {
         let native = model.hasPrefix("xai/") ? String(model.dropFirst(4)) : model
         if native.contains("imagine") || native.contains("video") { return nil }
         switch native {
+        // Provider-specific by design: CLIProxyAPI xAI list prices are keyed by grok model IDs from the gateway dump.
         case "grok", "grok-latest", "grok-4.6", "grok-4.6-latest":
             return .init(input: 2, output: 6, cacheRead: 0.5)
         case "grok-4.5", "grok-4.5-latest":
@@ -446,14 +449,15 @@ public enum CLIProxyAPISpendAggregator {
 
     private static func modelsDevCostUSD(
         event: CLIProxyAPISpendEvent,
-        input: Int,
-        output: Int,
-        cacheRead: Int,
-        cacheWrite: Int,
         catalog: ModelsDevCatalog?,
         cacheRoot: URL?) -> Double?
     {
-        for providerID in Self.modelsDevProviderIDs(for: event.upstreamProvider) {
+        let tokens = event.tokens
+        let input = tokens.inputTokens ?? 0
+        let output = tokens.outputTokens ?? 0
+        let cacheRead = tokens.cacheReadTokens ?? 0
+        let cacheWrite = tokens.cacheCreationTokens ?? 0
+        for providerID in self.modelsDevProviderIDs(for: event.upstreamProvider) {
             let lookup = catalog?.pricing(providerID: providerID, modelID: event.model)
                 ?? ModelsDevPricingPipeline.lookup(
                     providerID: providerID,
@@ -478,6 +482,8 @@ public enum CLIProxyAPISpendAggregator {
     private static func modelsDevProviderIDs(for upstreamProvider: String) -> [String] {
         let key = upstreamProvider.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         switch key {
+        // Provider-specific by design: CLIProxyAPI maps gateway upstream names
+        // (gemini/antigravity, grok/xai, openai/codex, claude) onto models.dev provider IDs.
         case "gemini", "google", "antigravity":
             return ["google"]
         case "grok", "xai":

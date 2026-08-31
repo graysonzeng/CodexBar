@@ -1523,3 +1523,8 @@
 "menu_bar_layout_conditional_default_session_spent" = "Phiên gần cạn";
 "menu_bar_layout_conditional_default_either_high" = "Phiên hoặc tuần đang ở mức cao";
 "menu_bar_layout_conditional_default_scoped_weekly" = "Tuần theo mô hình đã dùng trên 60%";
+
+/* CodexRadar Overview */
+"Software Engineering" = "Kỹ thuật phần mềm";
+"IQ" = "IQ";
+"%d min" = "%d phút";

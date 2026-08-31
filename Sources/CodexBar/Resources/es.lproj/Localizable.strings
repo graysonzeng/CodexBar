@@ -1520,3 +1520,8 @@
 "menu_bar_layout_conditional_default_session_spent" = "Sesión casi agotada";
 "menu_bar_layout_conditional_default_either_high" = "Sesión o semana en nivel alto";
 "menu_bar_layout_conditional_default_scoped_weekly" = "Semana por modelo por encima del 60 %";
+
+/* CodexRadar Overview */
+"Software Engineering" = "Ingeniería de software";
+"IQ" = "IQ";
+"%d min" = "%d min";

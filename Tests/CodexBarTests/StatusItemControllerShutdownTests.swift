@@ -266,6 +266,7 @@ struct StatusItemControllerShutdownTests {
             settings: settings,
             startupBehavior: .testing,
             environmentBase: environment)
+        stubCodexRadarForUnrelatedRefreshTests(store)
         return StatusItemController(
             store: store,
             settings: settings,

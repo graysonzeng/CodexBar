@@ -1521,3 +1521,8 @@
 "menu_bar_layout_conditional_default_session_spent" = "Sessionen nästan förbrukad";
 "menu_bar_layout_conditional_default_either_high" = "Session eller vecka ligger högt";
 "menu_bar_layout_conditional_default_scoped_weekly" = "Modellvecka över 60 % använt";
+
+/* CodexRadar Overview */
+"Software Engineering" = "Programvaruteknik";
+"IQ" = "IQ";
+"%d min" = "%d min";

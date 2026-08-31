@@ -917,13 +917,15 @@ extension PiSessionCostScannerTests {
             inputTokens: 100,
             cachedInputTokens: 10,
             outputTokens: 5,
-            pricingDate: beforeDay))
+            pricingDate: beforeDay,
+            modelsDevCacheRoot: env.cacheRoot))
         let afterExpected = try #require(CostUsagePricing.codexCostUSD(
             model: "gpt-5.6-terra",
             inputTokens: 100,
             cachedInputTokens: 10,
             outputTokens: 5,
-            pricingDate: afterDay))
+            pricingDate: afterDay,
+            modelsDevCacheRoot: env.cacheRoot))
         let beforeCost = try #require(beforeRow.costUSD)
         let afterCost = try #require(afterRow.costUSD)
         #expect(abs(beforeCost - beforeExpected) < 1e-7)

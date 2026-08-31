@@ -204,6 +204,10 @@ struct OpenCodexUsageParserTests {
 
     @Test
     func `OpenCodex aggregator uses historical GPT-5_6 rates before July 2026 cutoff`() throws {
+        let modelsDevCacheRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("opencodex-pricing-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: modelsDevCacheRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: modelsDevCacheRoot) }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
         let beforeCutoff = Date(timeIntervalSince1970: 1_785_369_599)
@@ -234,7 +238,8 @@ struct OpenCodexUsageParserTests {
             ],
             now: afterCutoff,
             historyDays: 7,
-            calendar: calendar)
+            calendar: calendar,
+            modelsDevCacheRoot: modelsDevCacheRoot)
 
         let beforeDay = try #require(snapshot.daily.first(where: { $0.date == "2026-07-29" }))
         let afterDay = try #require(snapshot.daily.first(where: { $0.date == "2026-07-30" }))
@@ -243,13 +248,15 @@ struct OpenCodexUsageParserTests {
             inputTokens: 100,
             cachedInputTokens: 10,
             outputTokens: 5,
-            pricingDate: beforeCutoff))
+            pricingDate: beforeCutoff,
+            modelsDevCacheRoot: modelsDevCacheRoot))
         let afterExpected = try #require(CostUsagePricing.codexCostUSD(
             model: "gpt-5.6-terra",
             inputTokens: 100,
             cachedInputTokens: 10,
             outputTokens: 5,
-            pricingDate: afterCutoff))
+            pricingDate: afterCutoff,
+            modelsDevCacheRoot: modelsDevCacheRoot))
         let beforeCost = try #require(beforeDay.costUSD)
         let afterCost = try #require(afterDay.costUSD)
         #expect(abs(beforeCost - beforeExpected) < 1e-7)

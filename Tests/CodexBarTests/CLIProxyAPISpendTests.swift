@@ -382,7 +382,7 @@ struct CLIProxyAPISpendTests {
             upstreamProvider: "openai",
             model: "gpt-5.6-sol",
             alias: "gpt-5.6-sol",
-            tokens: CLIProxyAPISpendTokenMix(inputTokens: 100_000, outputTokens: 10_000, totalTokens: 110_000),
+            tokens: CLIProxyAPISpendTokenMix(inputTokens: 100_000, outputTokens: 10000, totalTokens: 110_000),
             failed: false,
             statusCode: 200)
         #expect(

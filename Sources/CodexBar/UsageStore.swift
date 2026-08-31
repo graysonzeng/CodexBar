@@ -169,7 +169,7 @@ final class UsageStore {
     var snapshots: [ProviderInstanceID: UsageSnapshot] = [:]
     var errors: [ProviderInstanceID: String] = [:]
     var diagnostics: [ProviderInstanceID: String] = [:]
-    var geminiObservedConsumerTierDeprecation = false
+    var geminiMigrationObservation: GeminiMigrationObservation = .none
     var knownLimitsAvailabilityByProvider: [ProviderInstanceID: UsageLimitsAvailability] = [:]
     var lastSourceLabels: [ProviderInstanceID: String] = [:]
     var lastFetchAttempts: [ProviderInstanceID: [ProviderFetchAttempt]] = [:]
@@ -189,9 +189,15 @@ final class UsageStore {
     var tokenSnapshotPublicationRevisions: [ProviderInstanceID: UInt64] = [:]
     var spendDashboardTokenPublications: [ProviderInstanceID: TokenSnapshotPublication] = [:]
     var spendDashboardTokenPublicationRevisions: [ProviderInstanceID: UInt64] = [:]
+    @ObservationIgnored var spendDashboardTokenIncorporatedTriggers:
+        [ProviderInstanceID: SpendDashboardTokenRefreshTrigger] = [:]
+    @ObservationIgnored var spendDashboardTokenFailedTriggers:
+        [ProviderInstanceID: SpendDashboardTokenRefreshTrigger] = [:]
     var spendDashboardPublication = SpendDashboardPublication.empty
     @ObservationIgnored var sharedSpendDashboardControllerStorage: SpendDashboardController?
     @ObservationIgnored var sharedSpendDashboardObservationStarted = false
+    @ObservationIgnored var sharedSpendDashboardObservationDebounceTask: Task<Void, Never>?
+    @ObservationIgnored var sharedSpendDashboardTokenPublicationDebounceTask: Task<Void, Never>?
     var tokenErrors: [ProviderInstanceID: String] = [:]
     var tokenRefreshInFlight: Set<ProviderInstanceID> = []
     var codexCostCatchUpActivity: CodexCostCatchUpActivity?
@@ -436,7 +442,7 @@ final class UsageStore {
     @ObservationIgnored var lastTokenFetchScope: [ProviderInstanceID: String] = [:]
     @ObservationIgnored var lastSpendDashboardTokenFetchAt: [ProviderInstanceID: Date] = [:]
     @ObservationIgnored var lastSpendDashboardTokenFetchScope: [ProviderInstanceID: String] = [:]
-    @ObservationIgnored var spendDashboardTokenRefreshInFlight: Set<ProviderInstanceID> = []
+    var spendDashboardTokenRefreshInFlight: Set<ProviderInstanceID> = []
     @ObservationIgnored var planUtilizationHistory: [ProviderInstanceID: PlanUtilizationHistoryBuckets] = [:]
     @ObservationIgnored var sessionEquivalentBurnCache: [ProviderInstanceID: SessionEquivalentBurnCacheEntry] = [:]
     @ObservationIgnored var sessionEquivalentHistoryScanCount: Int = 0

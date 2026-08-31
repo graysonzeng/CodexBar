@@ -33,7 +33,8 @@ extension StatusItemController {
 
     func makeMenuDescriptor(
         provider: UsageProvider?,
-        includeContextualActions: Bool) -> MenuDescriptor
+        includeContextualActions: Bool,
+        codexWorkspacesMenuEnabled: Bool = CodexWorkspacesMenuAvailability.isEnabledForCurrentProcess) -> MenuDescriptor
     {
         MenuDescriptor.build(
             provider: provider,
@@ -44,6 +45,7 @@ extension StatusItemController {
             codexAccountPromotionCoordinator: self.codexAccountPromotionCoordinator,
             updateReady: self.updater.updateStatus.isUpdateReady,
             includeContextualActions: includeContextualActions,
+            codexWorkspacesMenuEnabled: codexWorkspacesMenuEnabled,
             agentSessionsEnabled: self.settings.agentSessionsEnabled,
             agentSessionLabelStyle: self.settings.agentSessionLabelStyle,
             localAgentSessions: self.agentSessions.localSessions,
@@ -90,6 +92,10 @@ extension StatusItemController {
         switch entry {
         case let .text(text, style):
             "text:\(style):\(text)"
+        case let .action(_, .focusAgentSession(session, remoteHost)):
+            // Session rows are fixed-width hosted views. Their title can change every scan without
+            // affecting popup width, so avoid both measurement work and cache churn from its text.
+            "focusAgentSession:\(remoteHost ?? "local"):\(session.id)"
         case let .action(title, action):
             "action:\(title):\(self.measuredStandardMenuWidthCacheToken(for: action))"
         case let .unavailable(title, tooltip):
@@ -134,6 +140,8 @@ extension StatusItemController {
             "openTerminal:\(command)"
         case let .loginToProvider(url):
             "loginToProvider:\(url)"
+        case .openCodexWorkspaces:
+            CodexWorkspacesWindowIdentity.menuItem
         case .settings:
             "settings"
         case .about:

@@ -431,13 +431,16 @@ extension SpendDashboardModelTests {
         #expect(rebucketedRequest.cacheIdentity != request.cacheIdentity)
 
         let authData = Data("{\"tokens\":\"synthetic\"}".utf8)
-        try authData.write(to: CodexAuthFingerprint.authFileURL(homePath: home.path))
-        let exact = try #require(SpendDashboardSource.codexRequest(
-            account: account,
-            homePath: home.path,
-            providerName: "Codex",
-            index: 0,
-            count: 1))
+        let authURL = CodexAuthFingerprint.authFileURL(homePath: home.path)
+        try authData.write(to: authURL)
+        let exact = try CodexCredentialFileAccess.withFixtureScope(.init(files: [authURL])) {
+            try #require(SpendDashboardSource.codexRequest(
+                account: account,
+                homePath: home.path,
+                providerName: "Codex",
+                index: 0,
+                count: 1))
+        }
         #expect(exact.authFingerprint == CodexAuthFingerprint.fingerprint(data: authData))
         #expect(exact.authFileWasReadable)
         #expect(exact.cacheIdentity != request.cacheIdentity)

@@ -324,6 +324,8 @@ final class SettingsStore {
         antigravityOAuthCredentialsStore: AntigravityOAuthCredentialsStore = AntigravityOAuthCredentialsStore(),
         performInitialProviderDetection: Bool = !SettingsStore.isRunningTests)
     {
+        // Legacy credential migration must see the saved policy, including shared-defaults fallback.
+        KeychainAccessGate.isDisabled = Self.loadDebugDisableKeychainAccess(userDefaults: userDefaults)
         if !Self.isRunningTests {
             _ = UserProviderPluginRegistry.refresh()
         }
@@ -375,6 +377,7 @@ final class SettingsStore {
         let config = CodexBarConfigMigrator.loadOrMigrate(
             configStore: configStore,
             userDefaults: userDefaults,
+            keychainAccessDisabled: KeychainAccessGate.isExplicitlyDisabled,
             stores: legacyStores)
         self.userDefaults = userDefaults
         self.configStore = configStore
@@ -875,12 +878,23 @@ extension SettingsStore {
     }
 
     private static func loadMenuBarLayoutConditionals(userDefaults: UserDefaults) -> [MenuBarLayoutConditional] {
-        // A missing key means a fresh install, so hand back the shipped library. Any edit, add, or
-        // removal writes the key, so a library the user deliberately emptied is never reseeded.
-        guard let data = userDefaults.data(forKey: "menuBarLayoutConditionals") else {
-            return MenuBarLayoutConditional.shippedLibrary()
-        }
-        return (try? JSONDecoder().decode([MenuBarLayoutConditional].self, from: data)) ?? []
+        // Neither key present means a fresh install, so hand back the shipped library. Any edit, add, or
+        // removal writes both keys, so a library the user deliberately emptied is never reseeded.
+        MenuBarLayoutPersistence.loadLibrary(
+            current: self.decodeMenuBarLayoutConditionals(
+                userDefaults.data(forKey: MenuBarLayoutUserDefaultsKey.conditionalsCurrent)),
+            legacy: self.decodeMenuBarLayoutConditionals(
+                userDefaults.data(forKey: MenuBarLayoutUserDefaultsKey.conditionals)),
+            into: userDefaults)
+            ?? MenuBarLayoutConditional.shippedLibrary()
+    }
+
+    /// Element-wise so one entry this build cannot understand — a library written by a newer release —
+    /// is dropped on its own instead of emptying the whole array.
+    private static func decodeMenuBarLayoutConditionals(_ data: Data?) -> [MenuBarLayoutConditional]? {
+        guard let data else { return nil }
+        return (try? JSONDecoder().decode([LenientMenuBarLayoutConditional].self, from: data))?
+            .compactMap(\.value)
     }
 
     private static func loadMenuBarLayoutOverrides(userDefaults: UserDefaults) -> [String: MenuBarLayout] {
@@ -914,13 +928,17 @@ extension SettingsStore {
         userDefaults.string(forKey: "copilotIconSecondaryWindowID") ?? CopilotIconSecondaryWindowSelection.chat
     }
 
-    private static func loadDebugDisableKeychainAccess(userDefaults: UserDefaults) -> Bool {
+    static func loadDebugDisableKeychainAccess(userDefaults: UserDefaults) -> Bool {
+        self.loadDebugDisableKeychainAccess(
+            userDefaults: userDefaults,
+            sharedDefaults: self.shouldBridgeSharedDefaults(for: userDefaults) ? self.sharedDefaults : nil)
+    }
+
+    static func loadDebugDisableKeychainAccess(userDefaults: UserDefaults, sharedDefaults: UserDefaults?) -> Bool {
         if let stored = userDefaults.object(forKey: "debugDisableKeychainAccess") as? Bool {
             return stored
         }
-        if Self.shouldBridgeSharedDefaults(for: userDefaults),
-           let shared = Self.sharedDefaults?.object(forKey: "debugDisableKeychainAccess") as? Bool
-        {
+        if let shared = sharedDefaults?.object(forKey: "debugDisableKeychainAccess") as? Bool {
             if Self.isRunningTests {
                 userDefaults.set(shared, forKey: "debugDisableKeychainAccess")
             }

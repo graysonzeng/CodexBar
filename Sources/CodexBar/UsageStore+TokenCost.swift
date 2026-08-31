@@ -90,7 +90,7 @@ extension UsageStore {
     }
 
     func tokenSnapshot(for provider: UsageProvider) -> CostUsageTokenSnapshot? {
-        self.tokenSnapshots[provider.instanceID]
+        self.accountScopedTokenSnapshot(for: provider)
     }
 
     func tokenSnapshotForCurrentProviderConfig(
@@ -119,7 +119,30 @@ extension UsageStore {
         self.tokenSnapshotPublicationRevisions[provider.instanceID] ?? 0
     }
 
+    enum TokenSnapshotError: LocalizedError {
+        case historyUnavailable
+
+        var errorDescription: String? {
+            "Local token history is unavailable or incomplete."
+        }
+    }
+
+    func retainsEstablishedTokenHistory(_ snapshot: CostUsageTokenSnapshot, for provider: UsageProvider) -> Bool {
+        // A bounded Codex refresh can succeed with partial rows while catch-up remains pending.
+        // Account and history-window changes fail the current-publication lookup below.
+        // Provider-specific by design: only Codex retains established history during bounded catch-up.
+        if provider == .codex,
+           !snapshot.historyCoverageIsEstablished,
+           self.tokenSnapshotPublicationForCurrentProviderConfig(for: provider)?
+               .snapshot?.historyCoverageIsEstablished == true
+        {
+            return true
+        }
+        return false
+    }
+
     func publishTokenSnapshot(_ snapshot: CostUsageTokenSnapshot, for provider: UsageProvider) {
+        if self.retainsEstablishedTokenHistory(snapshot, for: provider) { return }
         self.tokenSnapshots[provider.instanceID] = snapshot
         self.publishTokenSnapshotState(snapshot, for: provider)
     }
@@ -158,6 +181,8 @@ extension UsageStore {
         self.tokenSnapshotPublications.removeAll()
         self.spendDashboardTokenPublications.removeAll()
         self.spendDashboardTokenPublicationRevisions.removeAll()
+        self.spendDashboardTokenIncorporatedTriggers.removeAll()
+        self.spendDashboardTokenFailedTriggers.removeAll()
     }
 
     func installProviderDerivedTokenSnapshot(from snapshot: UsageSnapshot, for provider: UsageProvider) {
@@ -175,6 +200,11 @@ extension UsageStore {
         guard Self.tokenCostRequiresProviderSnapshot(provider) else { return }
         if let tokenSnapshot = self.tokenSnapshot(fromProviderSnapshot: snapshot, provider: provider) {
             self.publishTokenSnapshot(tokenSnapshot, for: provider)
+            // Provider-specific by design: a prepaid-balance snapshot without a usage chart means
+            // analytics failed. Leave the source unpublished so Overview counts it unavailable
+            // instead of known-zero spend.
+        } else if provider == .xai, XAICostUsageMapping.isAnalyticsUnavailable(snapshot) {
+            self.clearTokenSnapshot(for: provider)
         } else {
             self.publishConfirmedEmptyTokenSnapshot(for: provider)
         }
@@ -404,7 +434,7 @@ extension UsageStore {
     {
         guard self.providerPublicationRevisionIsCurrent(publicationRevision, for: provider),
               self.settings.providerConfigRevision(for: provider) == providerConfigRevision,
-              self.settings.costUsageEnabled,
+              self.settings.isCostUsageEffectivelyEnabled(for: provider),
               self.isEnabled(provider),
               self.settings.costUsageHistoryDays == historyDays
         else {
@@ -451,6 +481,9 @@ extension UsageStore {
         -> CostUsageTokenSnapshot?
     {
         let windowDays = historyDays ?? self.settings.costUsageHistoryDays
+        // Provider-specific by design: snapshot-backed spend sources own their live billing
+        // projection. Grok contributes local session tokens only; xAI contributes Management API
+        // daily spend only. Neither converts a quota or prepaid balance into dollars.
         switch provider {
         case .openai:
             return snapshot?.openAIAPIUsage?.toCostUsageTokenSnapshot()
@@ -466,14 +499,20 @@ extension UsageStore {
             }
         case .openrouter:
             return snapshot?.costUsage
+        case .xai:
+            return snapshot.flatMap { XAICostUsageMapping.tokenSnapshot(from: $0, historyDays: windowDays) }
+        case .grok:
+            return self.grokLocalTokenSnapshot(from: snapshot, historyDays: windowDays)
         default:
             return nil
         }
     }
 
     nonisolated static func tokenCostRequiresProviderSnapshot(_ provider: UsageProvider) -> Bool {
+        // Provider-specific by design: these providers project live usage snapshots into the
+        // shared spend catalog instead of running the local CostUsageFetcher JSONL pipeline.
         switch provider {
-        case .mistral, .openai, .opencodego, .openrouter:
+        case .grok, .mistral, .openai, .opencodego, .openrouter, .xai:
             true
         default:
             false
@@ -515,6 +554,7 @@ extension UsageStore {
         self.tokenErrors.removeAll()
         self.lastTokenFetchAt.removeAll()
         self.lastTokenFetchScope.removeAll()
+        // Provider-specific by design: cache reset and CLIProxyAPI history labels use fixed token-cost lanes.
         self.tokenFailureGates[.codex]?.reset()
         self.tokenFailureGates[.claude]?.reset()
         return nil
@@ -531,5 +571,17 @@ extension UsageStore {
             return snapshot.daily.isEmpty ? Self.tokenCostNoDataMessage(for: .cliproxyapi) : nil
         }
         return label
+    }
+
+    func regularTokenSnapshotIsConfirmedEmpty(
+        _ snapshot: CostUsageTokenSnapshot,
+        for provider: UsageProvider) throws -> Bool
+    {
+        guard snapshot.daily.isEmpty, snapshot.meteredCostUSD == nil else { return false }
+        if snapshot.historyCoverageIsEstablished { return true }
+        guard self.retainsEstablishedTokenHistory(snapshot, for: provider) else {
+            throw TokenSnapshotError.historyUnavailable
+        }
+        return false
     }
 }

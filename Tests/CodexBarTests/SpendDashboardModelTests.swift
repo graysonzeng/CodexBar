@@ -77,9 +77,13 @@ struct SpendDashboardModelTests {
             .mistral,
             .bedrock,
             .cursor,
+            .grok,
             .opencodego,
             .openrouter,
             .cliproxyapi,
+            .xai,
+            // Antigravity joined via the tokscale-compatible local usage readers.
+            .antigravity,
         ])
     }
 

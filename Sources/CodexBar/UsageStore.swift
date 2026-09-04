@@ -98,7 +98,7 @@ extension UsageStore {
         return self.openAIDashboard
     }
 
-    private static func isRunningTestsProcess() -> Bool {
+    static func isRunningTestsProcess() -> Bool {
         let environment = ProcessInfo.processInfo.environment
         let testKeys = ["XCTestConfigurationFilePath", "XCTestSessionIdentifier", "SWIFT_TESTING_ENABLED"]
         return testKeys.contains(where: { environment[$0] != nil }) || CommandLine.arguments.contains { argument in

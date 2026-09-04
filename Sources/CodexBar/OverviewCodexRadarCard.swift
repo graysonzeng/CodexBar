@@ -24,18 +24,20 @@ struct OverviewCodexRadarSummary: Equatable {
         }
     }
 
-    let title: String
+    let title: String?
     let rows: [Row]
     let visibleFingerprint: String
 
     init(snapshot: CodexRadarIntelligenceSnapshot?) {
-        let title = L("Software Engineering")
-        self.title = title
         guard let snapshot else {
+            self.title = nil
             self.rows = []
             self.visibleFingerprint = "none"
             return
         }
+
+        let title = Self.updatedTitle(from: snapshot.sourceUpdatedAt)
+        self.title = title
 
         let rows = CodexRadarIntelligenceTarget.allCases.map { target in
             let point = snapshot.point(for: target)
@@ -49,8 +51,17 @@ struct OverviewCodexRadarSummary: Equatable {
                 averageMinutes: isAvailable ? averageMinutes : nil)
         }
         self.rows = rows
-        self.visibleFingerprint = ([title] + rows.map { "\($0.displayName):\($0.fingerprintMetrics)" })
+        self.visibleFingerprint = ([title ?? "none"] + rows.map { "\($0.displayName):\($0.fingerprintMetrics)" })
             .joined(separator: "|")
+    }
+
+    private static func updatedTitle(from sourceUpdatedAt: Date?) -> String? {
+        guard let sourceUpdatedAt else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = codexBarLocalizedLocale()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return L("Updated absolute %@", formatter.string(from: sourceUpdatedAt))
     }
 
     static func officialLabel(for target: CodexRadarIntelligenceTarget) -> String {
@@ -70,10 +81,11 @@ struct OverviewCodexRadarCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(self.summary.title)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(.secondary)
-
+            if let title = self.summary.title {
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(Color(nsColor: .tertiaryLabelColor))
+            }
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(self.summary.rows) { row in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {

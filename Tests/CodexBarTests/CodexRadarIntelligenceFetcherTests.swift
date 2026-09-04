@@ -87,6 +87,7 @@ struct CodexRadarIntelligenceFetcherTests {
         #expect(snapshot.point(for: .deepseekV4ProMax).iq == 87.1)
         #expect(snapshot.point(for: .deepseekV4ProMax).averageMinutes == 42.41)
         #expect(snapshot.points.allSatisfy { $0.iq != 1.0 && $0.iq != 3.0 })
+        #expect(snapshot.sourceUpdatedAt == Self.sourceUpdatedAt("2026-08-30T17:38:19+00:00"))
     }
 
     @Test
@@ -399,5 +400,11 @@ struct CodexRadarIntelligenceFetcherTests {
             statusCode: status,
             httpVersion: "HTTP/1.1",
             headerFields: headers))
+    }
+
+    private static func sourceUpdatedAt(_ raw: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: raw)
     }
 }

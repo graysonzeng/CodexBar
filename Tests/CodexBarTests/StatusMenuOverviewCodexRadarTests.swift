@@ -282,6 +282,7 @@ extension StatusMenuTests {
           "schema": 3,
           "mode": "equal_latest_3",
           "benchmark_id": "deep-swe",
+          "source_updated_at": "2026-08-30T17:38:19+00:00",
           "points": [
             {"model": "gpt-5.6-sol", "effort": "xhigh", "iq": 100.45, "average_minutes": 24.37},
             {"model": "gpt-5.6-sol", "effort": "high", "iq": 98.21, "average_minutes": 19.82},

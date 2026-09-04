@@ -343,7 +343,7 @@ struct LocalizationLanguageCatalogTests {
     }
 
     @Test
-    func `software engineering card copy exists in every app catalog`() throws {
+    func `radar card copy exists in every app catalog`() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -358,16 +358,17 @@ struct LocalizationLanguageCatalogTests {
         for catalogURL in catalogs {
             let stringsURL = catalogURL.appendingPathComponent("Localizable.strings")
             let catalog = try #require(NSDictionary(contentsOf: stringsURL) as? [String: String])
-            let title = try #require(catalog["Software Engineering"])
+            #expect(catalog["Software Engineering"] == nil, "\(catalogURL.lastPathComponent)")
+            let updated = try #require(catalog["Updated absolute %@"])
             let iq = try #require(catalog["IQ"])
             let minutes = try #require(catalog["%d min"])
             let unavailable = try #require(catalog["Unavailable"])
-            #expect(!title.isEmpty, "\(catalogURL.lastPathComponent)")
+            #expect(updated.contains("%@"), "\(catalogURL.lastPathComponent)")
             #expect(!iq.isEmpty, "\(catalogURL.lastPathComponent)")
             #expect(!unavailable.isEmpty, "\(catalogURL.lastPathComponent)")
             #expect(minutes.contains("%d"), "\(catalogURL.lastPathComponent)")
             if catalogURL.lastPathComponent == "en.lproj" {
-                #expect(title == "Software Engineering")
+                #expect(updated == "Updated %@")
                 #expect(iq == "IQ")
                 #expect(minutes == "%d min")
                 #expect(unavailable == "Unavailable")

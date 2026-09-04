@@ -53,12 +53,14 @@ public struct CodexRadarIntelligencePoint: Equatable, Sendable {
 
 public struct CodexRadarIntelligenceSnapshot: Equatable, Sendable {
     public let points: [CodexRadarIntelligencePoint]
+    public let sourceUpdatedAt: Date?
 
-    public init(points: [CodexRadarIntelligencePoint]) {
+    public init(points: [CodexRadarIntelligencePoint], sourceUpdatedAt: Date? = nil) {
         let byTarget = Dictionary(points.map { ($0.target, $0) }, uniquingKeysWith: { _, last in last })
         self.points = CodexRadarIntelligenceTarget.allCases.map { target in
             byTarget[target] ?? CodexRadarIntelligencePoint(target: target, iq: nil, averageMinutes: nil)
         }
+        self.sourceUpdatedAt = sourceUpdatedAt
     }
 
     public func point(for target: CodexRadarIntelligenceTarget) -> CodexRadarIntelligencePoint {
@@ -153,7 +155,20 @@ public enum CodexRadarIntelligence {
                     return CodexRadarIntelligencePoint(target: target, iq: nil, averageMinutes: nil)
                 }
                 return try self.validatedPoint(target: target, point: point)
-            })
+            },
+            sourceUpdatedAt: self.parseSourceUpdatedAt(payload.sourceUpdatedAt))
+    }
+
+    private static func parseSourceUpdatedAt(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: raw) {
+            return date
+        }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: raw)
     }
 
     private static func validatedPoint(

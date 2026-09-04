@@ -26,6 +26,9 @@ extension UsageStore {
         if let inFlight = self.codexRadarTask {
             return inFlight
         }
+        if self._test_codexRadarTransportOverride == nil, Self.isRunningTestsProcess() {
+            return nil
+        }
         if !force, self.shouldSkipCodexRadarRefresh(now: now) {
             return nil
         }
@@ -91,6 +94,7 @@ extension UsageStore {
                     return point
                 }
                 return lastGood.point(for: target)
-            })
+            },
+            sourceUpdatedAt: incoming.sourceUpdatedAt ?? lastGood.sourceUpdatedAt)
     }
 }

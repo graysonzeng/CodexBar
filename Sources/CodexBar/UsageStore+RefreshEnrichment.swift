@@ -58,7 +58,7 @@ extension UsageStore {
         case .forcedForeground, .forcedBackground:
             await self.refreshCodexRadarIntelligence(force: true)
         case .automatic:
-            break
+            self.scheduleCodexRadarIntelligenceRefresh()
         }
     }
 

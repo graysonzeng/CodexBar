@@ -6,11 +6,13 @@ import Testing
 struct OverviewCodexRadarSummaryTests {
     @Test
     func `projects official labels and Math round integers`() {
+        let updatedAt = Date(timeIntervalSince1970: 1_800_000_000)
         let summary = OverviewCodexRadarSummary(snapshot: Self.snapshot(
             iq: 98.21,
-            minutes: 19.82))
+            minutes: 19.82,
+            sourceUpdatedAt: updatedAt))
 
-        #expect(summary.title == L("Software Engineering"))
+        #expect(summary.title == Self.updatedTitle(updatedAt))
         #expect(summary.rows.map(\.displayName) == [
             "Sol xhigh",
             "Sol high",
@@ -21,6 +23,13 @@ struct OverviewCodexRadarSummaryTests {
         #expect(summary.rows.map(\.iq) == [98, 98, 98, 98, 98])
         #expect(summary.rows.map(\.averageMinutes) == [20, 20, 20, 20, 20])
         #expect(summary.rows.map(\.isAvailable) == [true, true, true, true, true])
+    }
+
+    @Test
+    func `omits title when source updated at is missing`() {
+        let summary = OverviewCodexRadarSummary(snapshot: Self.snapshot(iq: 98.21, minutes: 19.82))
+        #expect(summary.title == nil)
+        #expect(summary.visibleFingerprint.hasPrefix("none|"))
     }
 
     @Test
@@ -67,12 +76,26 @@ struct OverviewCodexRadarSummaryTests {
         #expect(roundedTwenty.visibleFingerprint != roundsToNineteen.visibleFingerprint)
         #expect(nilSnapshot.visibleFingerprint == "none")
         #expect(nilSnapshot.rows.isEmpty)
+        #expect(nilSnapshot.title == nil)
     }
 
-    private static func snapshot(iq: Double, minutes: Double) -> CodexRadarIntelligenceSnapshot {
+    private static func snapshot(
+        iq: Double,
+        minutes: Double,
+        sourceUpdatedAt: Date? = nil) -> CodexRadarIntelligenceSnapshot
+    {
         CodexRadarIntelligenceSnapshot(
             points: CodexRadarIntelligenceTarget.allCases.map { target in
                 CodexRadarIntelligencePoint(target: target, iq: iq, averageMinutes: minutes)
-            })
+            },
+            sourceUpdatedAt: sourceUpdatedAt)
+    }
+
+    private static func updatedTitle(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = codexBarLocalizedLocale()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return L("Updated absolute %@", formatter.string(from: date))
     }
 }

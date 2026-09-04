@@ -18,6 +18,7 @@ struct UsageStoreCodexRadarTests {
         let snapshot = try #require(store.codexRadarSnapshot)
         #expect(snapshot.point(for: .gpt56SolXhigh).iq == 100.45)
         #expect(snapshot.point(for: .gpt56SolXhigh).averageMinutes == 24.37)
+        #expect(snapshot.sourceUpdatedAt == Date(timeIntervalSince1970: 1_788_111_499))
         #expect(store.codexRadarRevision == 1)
         #expect(store.codexRadarLastSuccessfulFetchAt == now)
         #expect(store.codexRadarLastFailureAt == nil)
@@ -204,17 +205,23 @@ struct UsageStoreCodexRadarTests {
     }
 
     @Test
-    func `automatic refresh does not request CodexRadar`() async {
+    func `automatic refresh requests CodexRadar and honors success TTL`() async {
         let store = Self.makeStore(suite: "UsageStoreCodexRadarTests-automatic")
         Self.stubProviderRefresh(store)
         let transport = Self.transport(body: Self.fullPayload)
         store._test_codexRadarTransportOverride = transport
 
         await store.refresh(forceTokenUsage: false)
-        await store.refresh(enrichmentMode: .automatic)
-
         #expect(await transport.requests().isEmpty)
-        #expect(store.codexRadarSnapshot == nil)
+
+        await store.refresh(enrichmentMode: .automatic)
+        await store.codexRadarTask?.value
+        #expect(await transport.requests().count == 1)
+        #expect(store.codexRadarSnapshot != nil)
+
+        await store.refresh(enrichmentMode: .automatic)
+        await store.codexRadarTask?.value
+        #expect(await transport.requests().count == 1)
     }
 
     @Test
@@ -299,6 +306,7 @@ struct UsageStoreCodexRadarTests {
       "schema": 3,
       "mode": "equal_latest_3",
       "benchmark_id": "deep-swe",
+      "source_updated_at": "2026-08-30T17:38:19+00:00",
       "points": [
         {"model": "gpt-5.6-sol", "effort": "xhigh", "iq": 100.45, "average_minutes": 24.37},
         {"model": "gpt-5.6-sol", "effort": "high", "iq": 98.21, "average_minutes": 19.82},
@@ -315,6 +323,7 @@ struct UsageStoreCodexRadarTests {
       "schema": 3,
       "mode": "equal_latest_3",
       "benchmark_id": "deep-swe",
+      "source_updated_at": "2026-08-30T18:00:00+00:00",
       "points": [
         {"model": "gpt-5.6-sol", "effort": "xhigh", "iq": 101.0, "average_minutes": 25.0},
         {"model": "gpt-5.6-sol", "effort": "high", "iq": 98.21, "average_minutes": 19.82},
@@ -330,6 +339,7 @@ struct UsageStoreCodexRadarTests {
       "schema": 3,
       "mode": "equal_latest_3",
       "benchmark_id": "deep-swe",
+      "source_updated_at": "2026-08-30T18:00:00+00:00",
       "points": [
         {"model": "gpt-5.6-sol", "effort": "xhigh", "iq": 101.0, "average_minutes": 25.0},
         {"model": "gpt-5.6-sol", "effort": "high", "iq": 98.21, "average_minutes": 19.82},

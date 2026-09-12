@@ -141,6 +141,21 @@ struct OverviewSpendSummaryCardView: View {
 }
 
 extension StatusItemController {
+    func overviewProviderScopes(
+        enabledProviders: [UsageProvider]) -> (visible: [UsageProvider], spend: [UsageProvider])
+    {
+        let visible = self.settings.reconcileMergedOverviewSelectedProviders(
+            activeProviders: enabledProviders)
+        var seenSpendProviders = Set<UsageProvider>()
+        let spend = enabledProviders.filter { provider in
+            seenSpendProviders.insert(provider).inserted &&
+                self.settings.costSummaryShowsInline(for: provider)
+        }
+        return (
+            visible: visible,
+            spend: spend)
+    }
+
     func overviewSpendSubscriptionCount(providers: [UsageProvider]) -> Int {
         let providerScope = Set(providers)
         let publication = self.store.spendDashboardPublication

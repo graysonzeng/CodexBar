@@ -406,6 +406,7 @@ public struct CostUsageFetcher: Sendable {
         }
 
         let clampedHistoryDays = max(1, min(365, historyDays))
+        let remoteCalendar = overrideScannerOptions?.calendar ?? .current
 
         var remoteSnapshot: CostUsageTokenSnapshot?
         var remoteError: Error?
@@ -416,7 +417,8 @@ public struct CostUsageFetcher: Sendable {
                 environment: environment,
                 now: now,
                 historyDays: clampedHistoryDays,
-                cursorCookieHeaderOverride: cursorCookieHeaderOverride)
+                cursorCookieHeaderOverride: cursorCookieHeaderOverride,
+                calendar: remoteCalendar)
         } catch {
             if provider != .cursor {
                 throw error
@@ -1724,10 +1726,22 @@ extension CostUsageFetcher {
         environment: [String: String],
         now: Date,
         historyDays: Int,
-        cursorCookieHeaderOverride: String?) async throws -> CostUsageTokenSnapshot?
+        cursorCookieHeaderOverride: String?,
+        calendar: Calendar = .current) async throws -> CostUsageTokenSnapshot?
     {
+        // Provider-specific by design: CLIProxyAPI remote spend is a gateway usage dump; Bedrock uses AWS Cost Explorer
+        // billing rather than local transcripts.
+        if provider == .cliproxyapi {
+            return try await CLIProxyAPISpendSnapshot.load(
+                environment: environment,
+                now: now,
+                historyDays: historyDays,
+                calendar: calendar,
+                customPricing: CostUsageCustomPricing.load())
+        }
+
         // Provider-specific by design: Bedrock uses AWS billing while Cursor uses its macOS dashboard session.
-        let since = Calendar.current.date(byAdding: .day, value: -(historyDays - 1), to: now) ?? now
+        let since = calendar.date(byAdding: .day, value: -(historyDays - 1), to: now) ?? now
         if provider == .bedrock {
             let daily = try await Self.loadBedrockDailyReport(
                 environment: environment,
@@ -1738,6 +1752,7 @@ extension CostUsageFetcher {
                 now: now,
                 historyDays: historyDays,
                 useCurrentLocalDayForSession: false,
+                calendar: calendar,
                 costProvenance: .vendorMetered)
         }
 

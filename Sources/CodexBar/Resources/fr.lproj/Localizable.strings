@@ -1552,3 +1552,7 @@
 
 "agent_sessions_hide_unreachable_title" = "Masquer les hôtes inaccessibles";
 "agent_sessions_hide_unreachable_subtitle" = "Masquer les hôtes lorsque la récupération de leurs sessions échoue.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d min";

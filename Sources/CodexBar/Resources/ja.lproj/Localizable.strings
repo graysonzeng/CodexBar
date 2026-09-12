@@ -1553,3 +1553,7 @@
 
 "agent_sessions_hide_unreachable_title" = "接続できないホストを非表示";
 "agent_sessions_hide_unreachable_subtitle" = "セッションの取得に失敗したホストを非表示にします。";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d分";

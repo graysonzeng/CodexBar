@@ -1248,12 +1248,14 @@ extension CodexBackgroundRefreshCoalescingTests {
             "CODEX_HOME": root.appendingPathComponent(".codex", isDirectory: true).path,
             "XDG_CONFIG_HOME": root.appendingPathComponent(".config", isDirectory: true).path,
         ]
-        return UsageStore(
+        let store = UsageStore(
             fetcher: UsageFetcher(environment: environment),
             browserDetection: BrowserDetection(cacheTTL: 0),
             settings: settings,
             startupBehavior: .testing,
             environmentBase: environment)
+        stubCodexRadarForUnrelatedRefreshTests(store)
+        return store
     }
 
     static func installManagedAccount(

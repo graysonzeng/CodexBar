@@ -1555,3 +1555,7 @@
 
 "agent_sessions_hide_unreachable_title" = "Erişilemeyen ana bilgisayarları gizle";
 "agent_sessions_hide_unreachable_subtitle" = "Oturumları alınamadığında ana bilgisayarları gizle.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d dk";

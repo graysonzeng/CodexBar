@@ -49,7 +49,8 @@ enum OpenCodexUsageAggregator {
         calendar: Calendar,
         customPricing: CostUsageCustomPricing = .empty,
         modelsDevCatalog: ModelsDevCatalog? = nil,
-        customPricingOverlay: CostUsageCustomPricing? = nil) -> CostUsageTokenSnapshot
+        customPricingOverlay: CostUsageCustomPricing? = nil,
+        modelsDevCacheRoot: URL? = nil) -> CostUsageTokenSnapshot
     {
         let days = max(1, min(365, historyDays))
         let today = calendar.startOfDay(for: now)
@@ -77,7 +78,7 @@ enum OpenCodexUsageAggregator {
             overlay = .empty
         } else {
             catalog = modelsDevCatalog
-                ?? CostUsagePricing.modelsDevCatalog()
+                ?? CostUsagePricing.modelsDevCatalog(cacheRoot: modelsDevCacheRoot)
                 ?? ModelsDevCatalog(providers: [:])
             overlay = customPricingOverlay ?? CostUsagePricing.customPricingOverlay()
         }
@@ -96,7 +97,8 @@ enum OpenCodexUsageAggregator {
                 entry: entry,
                 customPricing: customPricing,
                 modelsDevCatalog: catalog,
-                customPricingOverlay: overlay)
+                customPricingOverlay: overlay,
+                modelsDevCacheRoot: modelsDevCacheRoot)
             let dayKey = dayMemo.key(for: entry.timestamp, calendar: calendar)
             var day = daysByKey[dayKey] ?? DayAccumulator()
             Self.merge(entry, cost: cost, into: &day)
@@ -291,7 +293,8 @@ enum OpenCodexUsageAggregator {
         entry: OpenCodexUsageEntry,
         customPricing: CostUsageCustomPricing,
         modelsDevCatalog: ModelsDevCatalog,
-        customPricingOverlay: CostUsageCustomPricing) -> Double?
+        customPricingOverlay: CostUsageCustomPricing,
+        modelsDevCacheRoot: URL?) -> Double?
     {
         guard entry.usageStatus == .reported || entry.usageStatus == .estimated else { return nil }
         let usage = entry.usage
@@ -323,6 +326,7 @@ enum OpenCodexUsageAggregator {
             cacheWriteInputTokens: cacheWrite,
             pricingDate: entry.timestamp,
             modelsDevCatalog: modelsDevCatalog,
+            modelsDevCacheRoot: modelsDevCacheRoot,
             customPricing: customPricingOverlay)
     }
 

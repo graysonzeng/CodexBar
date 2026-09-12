@@ -1553,3 +1553,7 @@
 
 "agent_sessions_hide_unreachable_title" = "Приховувати недоступні вузли";
 "agent_sessions_hide_unreachable_subtitle" = "Приховувати вузли, якщо не вдалося отримати їхні сеанси.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d хв";

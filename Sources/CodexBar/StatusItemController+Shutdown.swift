@@ -37,6 +37,7 @@ extension StatusItemController {
         self.manualRefreshTasks.removeAll()
         self.store.cancelForcedRefreshEnrichment()
         self.store.cancelRequiredRefresh()
+        self.store.cancelCodexRadarIntelligence()
         self.store.stopSharedSpendDashboardPublication()
         self.menuCardRefreshMonitor.resetManualRefresh()
         self.screenChangeVisibilityTask?.cancel()

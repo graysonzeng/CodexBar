@@ -145,6 +145,7 @@ struct UsageStoreResetBoundaryRefreshTests {
             browserDetection: BrowserDetection(cacheTTL: 0),
             settings: settings,
             startupBehavior: .testing)
+        stubCodexRadarForUnrelatedRefreshTests(store)
         let tokenGate = BlockingForcedTokenRefresh()
         var providerRefreshes = 0
         var didObserveWait = false

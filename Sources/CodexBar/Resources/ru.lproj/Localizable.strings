@@ -1554,3 +1554,7 @@
 
 "agent_sessions_hide_unreachable_title" = "Скрывать недоступные узлы";
 "agent_sessions_hide_unreachable_subtitle" = "Скрывать узлы, если не удалось получить их сеансы.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d мин";

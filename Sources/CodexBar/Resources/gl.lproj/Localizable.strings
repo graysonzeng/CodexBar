@@ -1552,3 +1552,7 @@
 
 "agent_sessions_hide_unreachable_title" = "Agochar os hosts inaccesibles";
 "agent_sessions_hide_unreachable_subtitle" = "Agocha os hosts cando falla a consulta das súas sesións.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d min";

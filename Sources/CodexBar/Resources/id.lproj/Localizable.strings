@@ -1556,3 +1556,7 @@
 
 "agent_sessions_hide_unreachable_title" = "Sembunyikan host yang tidak terjangkau";
 "agent_sessions_hide_unreachable_subtitle" = "Sembunyikan host saat pengambilan sesinya gagal.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d mnt";

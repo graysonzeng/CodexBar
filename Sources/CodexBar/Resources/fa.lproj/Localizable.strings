@@ -1557,3 +1557,7 @@
 
 "agent_sessions_hide_unreachable_title" = "پنهان کردن میزبان‌های در دسترس نبودنی";
 "agent_sessions_hide_unreachable_subtitle" = "میزبان‌ها را در صورت ناموفق بودن دریافت نشست‌هایشان پنهان کنید.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d دقیقه";

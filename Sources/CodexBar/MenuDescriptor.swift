@@ -286,12 +286,14 @@ struct MenuDescriptor {
                 }
                 if paceVisible,
                    presentation.menu.showsPrimaryWeeklyPace,
+                   !presentation.menuCard.hidesPaceCaptions,
                    let pace = store.weeklyPace(provider: provider, window: primary, dataConfidence: snap.dataConfidence)
                 {
                     let paceSummary = UsagePaceText.weeklySummary(provider: provider, pace: pace)
                     entries.append(.text(paceSummary, .secondary))
                 }
                 if paceVisible,
+                   !presentation.menuCard.hidesPaceCaptions,
                    let paceSummary = UsagePaceText.sessionSummary(provider: provider, window: primary)
                 {
                     entries.append(.text(paceSummary, .secondary))
@@ -325,6 +327,7 @@ struct MenuDescriptor {
                     entries.append(.text(detail, .secondary))
                 }
                 if paceVisible,
+                   !presentation.menuCard.hidesPaceCaptions,
                    let pace = store.weeklyPace(provider: provider, window: weekly, dataConfidence: snap.dataConfidence)
                 {
                     let paceSummary = UsagePaceText.weeklySummary(provider: provider, pace: pace)

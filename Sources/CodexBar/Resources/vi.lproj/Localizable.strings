@@ -1554,3 +1554,7 @@
 
 "agent_sessions_hide_unreachable_title" = "Ẩn máy chủ không thể truy cập";
 "agent_sessions_hide_unreachable_subtitle" = "Ẩn máy chủ khi không lấy được các phiên của máy chủ đó.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d phút";

@@ -361,6 +361,40 @@ struct LocalizationLanguageCatalogTests {
     }
 
     @Test
+    func `radar card copy exists in every app catalog`() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let resourcesURL = root.appendingPathComponent("Sources/CodexBar/Resources")
+        let catalogs = try FileManager.default.contentsOfDirectory(
+            at: resourcesURL,
+            includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "lproj" }
+
+        #expect(catalogs.count == 23)
+        for catalogURL in catalogs {
+            let stringsURL = catalogURL.appendingPathComponent("Localizable.strings")
+            let catalog = try #require(NSDictionary(contentsOf: stringsURL) as? [String: String])
+            #expect(catalog["Software Engineering"] == nil, "\(catalogURL.lastPathComponent)")
+            let updated = try #require(catalog["Updated absolute %@"])
+            let iq = try #require(catalog["IQ"])
+            let minutes = try #require(catalog["%d min"])
+            let unavailable = try #require(catalog["Unavailable"])
+            #expect(updated.contains("%@"), "\(catalogURL.lastPathComponent)")
+            #expect(!iq.isEmpty, "\(catalogURL.lastPathComponent)")
+            #expect(!unavailable.isEmpty, "\(catalogURL.lastPathComponent)")
+            #expect(minutes.contains("%d"), "\(catalogURL.lastPathComponent)")
+            if catalogURL.lastPathComponent == "en.lproj" {
+                #expect(updated == "Updated %@")
+                #expect(iq == "IQ")
+                #expect(minutes == "%d min")
+                #expect(unavailable == "Unavailable")
+            }
+        }
+    }
+
+    @Test
     func `partial spend copy exists in every app catalog`() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -606,6 +640,7 @@ struct LocalizationLanguageCatalogTests {
             "Gemini Flash",
             "GitHub",
             "Google OAuth",
+            "IQ",
             "No",
             "Oasis-Token",
             "Password",
@@ -614,6 +649,7 @@ struct LocalizationLanguageCatalogTests {
             "Token",
             "%@ %@",
             "%@: %@",
+            "%d min",
             "byte_unit_byte",
             "byte_unit_gigabyte",
             "byte_unit_kilobyte",

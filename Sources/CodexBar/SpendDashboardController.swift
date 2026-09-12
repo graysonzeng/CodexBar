@@ -695,7 +695,7 @@ enum SpendDashboardSource {
             "\(provider.rawValue):\(settings.providerConfigRevision(for: provider))"
         }
         parts.append("bucket:\(settings.costUsageBucketTimeZoneIdentifier)")
-        if providers.contains(.codex) {
+        if providers.contains(UsageProvider.codex) {
             parts.append(contentsOf: settings.codexVisibleAccountProjection.visibleAccounts.map { account in
                 let homePath: String? = switch account.selectionSource {
                 case .liveSystem:

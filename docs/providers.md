@@ -8,7 +8,7 @@ read_when:
 
 # Providers
 
-CodexBar currently registers 69 provider IDs. Some companies expose multiple surfaces, such as Codex vs OpenAI API or
+CodexBar currently registers 70 provider IDs. Some companies expose multiple surfaces, such as Codex vs OpenAI API or
 OpenCode vs OpenCode Go, because the auth source and quota shape differ.
 
 ## Fetch strategies (current)
@@ -33,7 +33,9 @@ arriving during a scan coalesce into a follow-up; a failed attempt waits for a n
 dashboard refresh before retrying. Codex account-cache ownership and provider-derived spend sources are unchanged.
 
 Native cost-history sources are the descriptors that advertise token-cost support: Codex, Claude, OpenAI Admin,
-Mistral, AWS Bedrock, Vertex AI, Cursor, and OpenCode Go. Providers without that contract are omitted instead of
+Mistral, AWS Bedrock, Vertex AI, Cursor, OpenCode Go, OpenRouter, and CLIProxyAPI. CLIProxyAPI spend is an opt-in
+proxy-observed list-price estimate (Track CLIProxyAPI spend + CPA `usage-statistics-enabled`); it stays on its own
+row and is excluded from billed Codex/Claude totals. Providers without that contract are omitted instead of
 appearing as empty subscriptions. Each native currency has its own total, ranking, and daily chart; CodexBar never
 adds or ranks amounts across currencies.
 
@@ -114,6 +116,7 @@ complete when the available scan window covers fewer days.
 | Grok | `grok agent stdio` JSON-RPC `x.ai/billing` (`cli`) → grok.com billing gRPC-web via Chrome session cookies (`web`); local `~/.grok/sessions` signals as fallback. |
 | GroqCloud | API key → Prometheus metrics API for request/token/cache-hit rates (`api`). |
 | LLM Proxy | API key + base URL → `/v1/quota-stats` aggregate proxy usage (`api`). |
+| CLIProxyAPI | Management key + base URL → `/v0/management/auth-files` and `api-call` for Codex/Gemini/Antigravity/Grok quota (`api`). |
 | ClawRouter | API key + optional base URL → `/v1/usage` monthly budget, spend, and routed-provider usage (`api`). |
 | Wayfinder | Local gateway URL → `/healthz`, `/v1/savings`, `/router/models`, `/metrics` for health, routing split, savings, and decision latency (`api`). |
 | LiteLLM | API key + base URL → `/key/info`, then `/user/info` or `/team/info` budget usage (`api`). |
@@ -559,6 +562,15 @@ JavaScriptCore is the macOS rollback engine. The committed `.js` is generated fr
 - Reads `/v1/quota-stats` for aggregate proxy usage with lowest remaining quota, requests, tokens, and approximate cost.
 - Status: none yet.
 - Details: `docs/llm-proxy.md`.
+
+## CLIProxyAPI
+- Management key from config `apiKey` or `CLIPROXYAPI_MANAGEMENT_KEY`; optional base URL from `enterpriseHost` or `CLIPROXYAPI_BASE_URL` (default `http://127.0.0.1:8317`).
+- Optional `workspaceID` / `CLIPROXYAPI_AUTH_INDEX` limits refresh to one credential.
+- Lists `/v0/management/auth-files`, then uses `/v0/management/api-call` to fetch Codex `wham/usage`, Gemini/Antigravity `retrieveUserQuota`, and Grok weekly credits.
+- Optional spend tracking (config `extrasEnabled` / `CLIPROXYAPI_SPEND_TRACKING`) pops `/v0/management/usage-queue` every 5s. Requires CLIProxyAPI `usage-statistics-enabled: true` (defaults false).
+- Primary window is the highest used session/Pro lane among those accounts; extra rows name each account.
+- Status: none yet.
+- Details: `docs/cliproxyapi.md`.
 
 ## ClawRouter
 - API key from the resolved CodexBar config (`providers[].apiKey`) or `CLAWROUTER_API_KEY`.

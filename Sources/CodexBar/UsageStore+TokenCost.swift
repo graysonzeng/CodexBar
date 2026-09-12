@@ -19,25 +19,6 @@ struct TokenSnapshotPublication: Sendable, Equatable {
 }
 
 extension UsageStore {
-    func logTokenUsageSuccess(
-        provider: UsageProvider,
-        snapshot: CostUsageTokenSnapshot,
-        historyDays: Int,
-        startedAt: Date)
-    {
-        let durationText = String(format: "%.2f", Date().timeIntervalSince(startedAt))
-        let sessionCost = snapshot.sessionCostUSD
-            .map { UsageFormatter.currencyString($0, currencyCode: snapshot.currencyCode) } ?? "—"
-        let monthCost = snapshot.last30DaysCostUSD
-            .map { UsageFormatter.currencyString($0, currencyCode: snapshot.currencyCode) } ?? "—"
-        let message =
-            "cost usage success provider=\(provider.rawValue) " +
-            "duration=\(durationText)s " +
-            "today=\(sessionCost) " +
-            "historyDays=\(historyDays) windowCost=\(monthCost)"
-        self.tokenCostLogger.info(message)
-    }
-
     enum CursorCostCookiePreparation {
         case proceed(String?)
         case reject
@@ -73,9 +54,10 @@ extension UsageStore {
 
         let fetcher = self.costUsageFetcher
         let timeoutSeconds = self.tokenFetchTimeout
-        // Provider-specific by design: the Codex ledger owns pricing refresh while Bedrock resolves AWS environment.
+        // Provider-specific by design: Codex local ledger skips models.dev pricing refresh; Bedrock and CLIProxyAPI
+        // rebuild the fetch environment so AWS/gateway credentials are not inherited from process env.
         let allowPricingRefresh = provider != .codex || !self.settings.codexLocalSessionCostLedgerEnabled
-        let environment = provider == .bedrock
+        let environment = (provider == .bedrock || provider == .cliproxyapi)
             ? ProviderRegistry.makeEnvironment(
                 base: self.environmentBase,
                 provider: provider,
@@ -480,6 +462,7 @@ extension UsageStore {
         snapshot: CostUsageTokenSnapshot,
         includeSettingsRevision: Bool = true) -> String
     {
+        // Provider-specific by design: Cursor Auto replaces the provisional cookie scope with the fetched identity.
         guard provider == .cursor,
               self.settings.cursorCookieSource == .auto,
               let fingerprint = snapshot.credentialScopeFingerprint
@@ -571,6 +554,7 @@ extension UsageStore {
         self.tokenErrors.removeAll()
         self.lastTokenFetchAt.removeAll()
         self.lastTokenFetchScope.removeAll()
+        // Provider-specific by design: cache reset and CLIProxyAPI history labels use fixed token-cost lanes.
         self.tokenFailureGates[.codex]?.reset()
         self.tokenFailureGates[.claude]?.reset()
         return nil
@@ -578,6 +562,15 @@ extension UsageStore {
 
     nonisolated static func tokenCostNoDataMessage(for provider: UsageProvider) -> String {
         ProviderDescriptorRegistry.descriptor(for: provider).tokenCost.noDataMessage()
+    }
+
+    /// Provider-specific by design: CLIProxyAPI maps its queue-history disclaimer onto the shared token-error lane.
+    nonisolated static func cliproxyapiTokenError(from snapshot: CostUsageTokenSnapshot) -> String? {
+        let label = snapshot.historyLabel
+        if label == nil || label == CLIProxyAPISpendSnapshot.observedDisclaimer {
+            return snapshot.daily.isEmpty ? Self.tokenCostNoDataMessage(for: .cliproxyapi) : nil
+        }
+        return label
     }
 
     func regularTokenSnapshotIsConfirmedEmpty(

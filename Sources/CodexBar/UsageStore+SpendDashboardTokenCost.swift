@@ -150,6 +150,18 @@ extension UsageStore {
                 return
             }
             let hasUsage = !snapshot.daily.isEmpty || snapshot.meteredCostUSD != nil
+            // Provider-specific by design: CLIProxyAPI publishes labeled spend snapshots even when daily rows are
+            // empty.
+            if provider == .cliproxyapi {
+                self.lastSpendDashboardTokenFetchScope[provider.instanceID] = completedCostScopeSignature
+                self.spendDashboardTokenIncorporatedTriggers[provider.instanceID] = SpendDashboardTokenRefreshTrigger(
+                    providerConfigRevision: providerConfigRevision,
+                    scopeSignature: completedCostScopeSignature,
+                    regularPublicationRevision: trigger.regularPublicationRevision)
+                self.spendDashboardTokenFailedTriggers.removeValue(forKey: provider.instanceID)
+                self.publishSpendDashboardTokenSnapshot(snapshot, for: provider)
+                return
+            }
             guard hasUsage || snapshot.historyCoverageIsEstablished else {
                 throw TokenSnapshotError.historyUnavailable
             }
@@ -183,6 +195,20 @@ extension UsageStore {
                     provider: provider,
                     attemptedAt: now,
                     costScopeSignature: costScopeSignature)
+                return
+            }
+            // Provider-specific by design: CLIProxyAPI refresh failures keep a labeled empty snapshot instead of
+            // clearing token history.
+            if provider == .cliproxyapi {
+                let labeled = CLIProxyAPISpendSnapshot.emptySnapshot(
+                    now: now,
+                    historyDays: historyDays,
+                    calendar: Calendar.current,
+                    label: error.localizedDescription,
+                    fingerprint: nil,
+                    historyCoverageIsEstablished: false)
+                self.publishSpendDashboardTokenSnapshot(labeled, for: provider)
+                self.spendDashboardTokenFailedTriggers[provider.instanceID] = trigger
                 return
             }
             self.clearSpendDashboardTokenSnapshot(for: provider)

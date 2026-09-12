@@ -1552,3 +1552,7 @@
 
 "agent_sessions_hide_unreachable_title" = "Onbereikbare hosts verbergen";
 "agent_sessions_hide_unreachable_subtitle" = "Verberg hosts wanneer het ophalen van hun sessies mislukt.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d min";

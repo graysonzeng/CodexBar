@@ -1552,3 +1552,7 @@
 
 "agent_sessions_hide_unreachable_title" = "Dölj värdar som inte kan nås";
 "agent_sessions_hide_unreachable_subtitle" = "Dölj värdar när deras sessioner inte kan hämtas.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d min";

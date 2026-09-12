@@ -73,6 +73,7 @@ extension StatusItemController {
             // producing an infinite open/close/rebuild flicker loop (#2652).
             self.store.noteMenuOpened()
             self.agentSessions.refreshOnMenuOpen()
+            self.scheduleCodexRadarIntelligenceRefreshIfOverviewSelected()
         }
 
         let trace = self.beginMenuOperationTrace("menuWillOpen", breadcrumb: "menuWillOpen")
@@ -584,11 +585,10 @@ extension StatusItemController {
                 guard !model.isOverviewErrorOnly else { return nil }
                 return (provider: provider, model: model)
             }
-        guard !rows.isEmpty else { return false }
-
         let t0 = CACurrentMediaTime()
         defer { self.logChartRenderDurationIfSlow("addOverviewRows(\(rows.count))", startedAt: t0) }
 
+        var addedContent = false
         let spendProviders = providerScopes.spend
         let spendModel = self.overviewSpendDashboardModel(providers: spendProviders)
         let spendProviderCount = self.overviewSpendSubscriptionCount(providers: spendProviders)
@@ -618,57 +618,52 @@ extension StatusItemController {
                     spendSummary.provenanceText,
                 ].joined(separator: "|"))
             menu.addItem(summaryItem)
-            menu.addItem(.separator())
+            addedContent = true
         }
 
-        for (index, row) in rows.enumerated() {
-            let identifier = "\(Self.overviewRowIdentifierPrefix)\(row.provider.rawValue)"
-            let storageText = self.store.storageFootprintText(for: row.provider)
-            let submenu = self.makeOverviewRowSubmenu(
-                provider: row.provider,
-                model: row.model,
-                width: menuWidth)
-            let item = self.makeMenuCardItem(
-                OverviewMenuCardRowView(model: row.model, storageText: storageText, width: menuWidth),
-                id: identifier,
-                width: menuWidth,
-                heightCacheScope: row.provider.rawValue,
-                heightCacheFingerprint: row.model.heightFingerprint(
-                    section: "overview",
-                    additional: [UsageMenuCardView.Model.heightFingerprintField("storage", storageText)]),
-                submenu: submenu,
-                containsInteractiveControls: row.model.subtitleStyle == .error || row.model.usesLiveSubtitle,
-                usesGPUSelection: true,
-                onClick: { [weak self, weak interactionMenu] in
-                    guard let self, let interactionMenu else { return }
-                    self.selectOverviewProvider(row.provider, menu: interactionMenu)
-                })
-            if submenu == nil {
-                // Keep plain rows wired for keyboard activation and accessibility action paths.
-                item.target = self
-                item.action = #selector(self.selectOverviewProvider(_:))
-            }
-            menu.addItem(item)
-            if index < rows.count - 1 {
+        if self.addOverviewCodexRadarCard(to: menu, width: menuWidth, separated: addedContent) {
+            addedContent = true
+        }
+
+        if !rows.isEmpty {
+            if addedContent {
                 menu.addItem(.separator())
             }
+            for (index, row) in rows.enumerated() {
+                let identifier = "\(Self.overviewRowIdentifierPrefix)\(row.provider.rawValue)"
+                let storageText = self.store.storageFootprintText(for: row.provider)
+                let submenu = self.makeOverviewRowSubmenu(
+                    provider: row.provider,
+                    model: row.model,
+                    width: menuWidth)
+                let item = self.makeMenuCardItem(
+                    OverviewMenuCardRowView(model: row.model, storageText: storageText, width: menuWidth),
+                    id: identifier,
+                    width: menuWidth,
+                    heightCacheScope: row.provider.rawValue,
+                    heightCacheFingerprint: row.model.heightFingerprint(
+                        section: "overview",
+                        additional: [UsageMenuCardView.Model.heightFingerprintField("storage", storageText)]),
+                    submenu: submenu,
+                    containsInteractiveControls: row.model.subtitleStyle == .error || row.model.usesLiveSubtitle,
+                    usesGPUSelection: true,
+                    onClick: { [weak self, weak interactionMenu] in
+                        guard let self, let interactionMenu else { return }
+                        self.selectOverviewProvider(row.provider, menu: interactionMenu)
+                    })
+                if submenu == nil {
+                    // Keep plain rows wired for keyboard activation and accessibility action paths.
+                    item.target = self
+                    item.action = #selector(self.selectOverviewProvider(_:))
+                }
+                menu.addItem(item)
+                if index < rows.count - 1 {
+                    menu.addItem(.separator())
+                }
+            }
+            addedContent = true
         }
-        return true
-    }
-
-    func overviewProviderScopes(
-        enabledProviders: [UsageProvider]) -> (visible: [UsageProvider], spend: [UsageProvider])
-    {
-        let visible = self.settings.reconcileMergedOverviewSelectedProviders(
-            activeProviders: enabledProviders)
-        var seenSpendProviders = Set<UsageProvider>()
-        let spend = enabledProviders.filter { provider in
-            seenSpendProviders.insert(provider).inserted &&
-                self.settings.costSummaryShowsInline(for: provider)
-        }
-        return (
-            visible: visible,
-            spend: spend)
+        return addedContent
     }
 
     private func addOverviewEmptyState(to menu: NSMenu, enabledProviders: [UsageProvider]) {
@@ -1019,6 +1014,7 @@ extension StatusItemController {
                     case .overview:
                         self.settings.mergedMenuLastSelectedWasOverview = true
                         provider = self.resolvedMenuProvider()
+                        self.scheduleCodexRadarIntelligenceRefreshIfOverviewSelected()
                     case let .provider(selectedProvider):
                         self.settings.mergedMenuLastSelectedWasOverview = false
                         self.selectedMenuProvider = selectedProvider

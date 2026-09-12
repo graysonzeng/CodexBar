@@ -39,6 +39,7 @@ struct DeferredMenuInteractionRefreshTailTests {
             settings: settings,
             startupBehavior: .testing,
             environmentBase: environment)
+        stubCodexRadarForUnrelatedRefreshTests(store)
         let tokenTail = DeferredMenuRefreshTokenTailBlocker()
         var providerRefreshCount = 0
         store._test_providerRefreshOverride = { provider in

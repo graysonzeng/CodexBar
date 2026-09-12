@@ -1556,3 +1556,7 @@
 
 "agent_sessions_hide_unreachable_title" = "Ukryj nieosiągalne hosty";
 "agent_sessions_hide_unreachable_subtitle" = "Ukryj hosty, gdy pobieranie ich sesji się nie powiedzie.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d min";

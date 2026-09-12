@@ -120,6 +120,7 @@ extension StatusItemController {
             "credits=\(self.store.credits == nil ? "0" : "1")",
             "planHistoryRevision=\(self.store.planUtilizationHistoryRevision)",
             "claudeSwapRevision=\(self.store.claudeSwapRevision)",
+            "codexRadar=\(OverviewCodexRadarSummary(snapshot: self.store.codexRadarSnapshot).visibleFingerprint)",
         ]
 
         for provider in self.store.enabledFirstPartyProvidersForDisplay() {

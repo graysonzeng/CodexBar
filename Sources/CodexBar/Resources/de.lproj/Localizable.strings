@@ -1553,3 +1553,7 @@
 
 "agent_sessions_hide_unreachable_title" = "Nicht erreichbare Hosts ausblenden";
 "agent_sessions_hide_unreachable_subtitle" = "Hosts ausblenden, wenn ihre Sitzungen nicht abgerufen werden können.";
+
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d Min.";

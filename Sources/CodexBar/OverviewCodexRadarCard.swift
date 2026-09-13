@@ -66,9 +66,9 @@ struct OverviewCodexRadarSummary: Equatable {
 
     static func officialLabel(for target: CodexRadarIntelligenceTarget) -> String {
         switch target {
-        case .gpt56SolXhigh: "Sol xhigh"
-        case .gpt56SolHigh: "Sol high"
-        case .gpt56SolMedium: "Sol medium"
+        case .gpt6AstraXhigh: "Astra xhigh"
+        case .gpt6AstraHigh: "Astra high"
+        case .gpt6AstraMedium: "Astra medium"
         case .deepseekV4FlashMax: "DSV4 Flash max"
         case .deepseekV4ProMax: "DSV4 Pro max"
         }

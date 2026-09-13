@@ -6,9 +6,9 @@ struct CodexRadarIntelligenceFetcherTests {
     @Test
     func `allowlist order and wire keys are fixed`() {
         #expect(CodexRadarIntelligenceTarget.allCases.map(\.model) == [
-            "gpt-5.6-sol",
-            "gpt-5.6-sol",
-            "gpt-5.6-sol",
+            "gpt-6-astra",
+            "gpt-6-astra",
+            "gpt-6-astra",
             "deepseek-v4-flash",
             "deepseek-v4-pro",
         ])
@@ -41,14 +41,14 @@ struct CodexRadarIntelligenceFetcherTests {
     @Test
     func `snapshot init fills five slots by target`() {
         let snapshot = CodexRadarIntelligenceSnapshot(points: [
-            CodexRadarIntelligencePoint(target: .gpt56SolHigh, iq: 98.21, averageMinutes: 19.82),
+            CodexRadarIntelligencePoint(target: .gpt6AstraHigh, iq: 98.21, averageMinutes: 19.82),
         ])
 
         #expect(snapshot.points.map(\.target) == CodexRadarIntelligenceTarget.allCases)
-        #expect(snapshot.point(for: .gpt56SolHigh).iq == 98.21)
-        #expect(snapshot.point(for: .gpt56SolHigh).averageMinutes == 19.82)
-        #expect(snapshot.point(for: .gpt56SolXhigh).iq == nil)
-        #expect(snapshot.point(for: .gpt56SolXhigh).averageMinutes == nil)
+        #expect(snapshot.point(for: .gpt6AstraHigh).iq == 98.21)
+        #expect(snapshot.point(for: .gpt6AstraHigh).averageMinutes == 19.82)
+        #expect(snapshot.point(for: .gpt6AstraXhigh).iq == nil)
+        #expect(snapshot.point(for: .gpt6AstraXhigh).averageMinutes == nil)
         #expect(snapshot.point(for: .deepseekV4ProMax).iq == nil)
     }
 
@@ -76,12 +76,12 @@ struct CodexRadarIntelligenceFetcherTests {
         let snapshot = try await self.fetch(body: Self.fixtureData())
 
         #expect(snapshot.points.map(\.target) == CodexRadarIntelligenceTarget.allCases)
-        #expect(snapshot.point(for: .gpt56SolXhigh).iq == 100.45)
-        #expect(snapshot.point(for: .gpt56SolXhigh).averageMinutes == 24.37)
-        #expect(snapshot.point(for: .gpt56SolHigh).iq == 98.21)
-        #expect(snapshot.point(for: .gpt56SolHigh).averageMinutes == 19.82)
-        #expect(snapshot.point(for: .gpt56SolMedium).iq == 93.3)
-        #expect(snapshot.point(for: .gpt56SolMedium).averageMinutes == 16.16)
+        #expect(snapshot.point(for: .gpt6AstraXhigh).iq == 100.45)
+        #expect(snapshot.point(for: .gpt6AstraXhigh).averageMinutes == 24.37)
+        #expect(snapshot.point(for: .gpt6AstraHigh).iq == 98.21)
+        #expect(snapshot.point(for: .gpt6AstraHigh).averageMinutes == 19.82)
+        #expect(snapshot.point(for: .gpt6AstraMedium).iq == 93.3)
+        #expect(snapshot.point(for: .gpt6AstraMedium).averageMinutes == 16.16)
         #expect(snapshot.point(for: .deepseekV4FlashMax).iq == 86.16)
         #expect(snapshot.point(for: .deepseekV4FlashMax).averageMinutes == 31.39)
         #expect(snapshot.point(for: .deepseekV4ProMax).iq == 87.1)
@@ -96,7 +96,7 @@ struct CodexRadarIntelligenceFetcherTests {
             model: "deepseek-v4-pro",
             effort: "max"))
 
-        #expect(snapshot.point(for: .gpt56SolHigh).averageMinutes == 19.82)
+        #expect(snapshot.point(for: .gpt6AstraHigh).averageMinutes == 19.82)
         #expect(snapshot.point(for: .deepseekV4ProMax).iq == nil)
         #expect(snapshot.point(for: .deepseekV4ProMax).averageMinutes == nil)
         #expect(snapshot.points.count(where: { $0.iq != nil }) == 4)
@@ -121,7 +121,7 @@ struct CodexRadarIntelligenceFetcherTests {
         let snapshot = try await CodexRadarIntelligence.fetch(transport: stub)
 
         #expect(await stub.requests().count == 2)
-        #expect(snapshot.point(for: .gpt56SolHigh).averageMinutes == 19.82)
+        #expect(snapshot.point(for: .gpt6AstraHigh).averageMinutes == 19.82)
     }
 
     @Test
@@ -216,7 +216,7 @@ struct CodexRadarIntelligenceFetcherTests {
     @Test
     func `duplicate allowlist target is unexpectedPayload`() async throws {
         try await self.expectUnexpectedPayload(Self.duplicatingAllowlistPoint(
-            model: "gpt-5.6-sol",
+            model: "gpt-6-astra",
             effort: "xhigh"))
     }
 
@@ -224,7 +224,7 @@ struct CodexRadarIntelligenceFetcherTests {
     func `present missing iq is unexpectedPayload`() async throws {
         try await self.expectUnexpectedPayload(Self.removingMetric(
             "iq",
-            model: "gpt-5.6-sol",
+            model: "gpt-6-astra",
             effort: "high"))
     }
 
@@ -232,7 +232,7 @@ struct CodexRadarIntelligenceFetcherTests {
     func `present missing average_minutes is unexpectedPayload`() async throws {
         try await self.expectUnexpectedPayload(Self.removingMetric(
             "average_minutes",
-            model: "gpt-5.6-sol",
+            model: "gpt-6-astra",
             effort: "high"))
     }
 
@@ -241,7 +241,7 @@ struct CodexRadarIntelligenceFetcherTests {
         try await self.expectUnexpectedPayload(Self.settingMetric(
             NSNull(),
             key: "iq",
-            model: "gpt-5.6-sol",
+            model: "gpt-6-astra",
             effort: "high"))
     }
 
@@ -250,7 +250,7 @@ struct CodexRadarIntelligenceFetcherTests {
         try await self.expectUnexpectedPayload(Self.settingMetric(
             -1,
             key: "average_minutes",
-            model: "gpt-5.6-sol",
+            model: "gpt-6-astra",
             effort: "high"))
     }
 
@@ -268,7 +268,7 @@ struct CodexRadarIntelligenceFetcherTests {
         try await self.expectUnexpectedPayload(Self.settingMetric(
             1e300,
             key: "iq",
-            model: "gpt-5.6-sol",
+            model: "gpt-6-astra",
             effort: "medium"))
     }
 

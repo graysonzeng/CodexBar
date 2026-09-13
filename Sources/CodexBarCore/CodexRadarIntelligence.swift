@@ -4,16 +4,16 @@ import FoundationNetworking
 #endif
 
 public enum CodexRadarIntelligenceTarget: CaseIterable, Hashable, Sendable {
-    case gpt56SolXhigh
-    case gpt56SolHigh
-    case gpt56SolMedium
+    case gpt6AstraXhigh
+    case gpt6AstraHigh
+    case gpt6AstraMedium
     case deepseekV4FlashMax
     case deepseekV4ProMax
 
     public var model: String {
         switch self {
-        case .gpt56SolXhigh, .gpt56SolHigh, .gpt56SolMedium:
-            "gpt-5.6-sol"
+        case .gpt6AstraXhigh, .gpt6AstraHigh, .gpt6AstraMedium:
+            "gpt-6-astra"
         case .deepseekV4FlashMax:
             "deepseek-v4-flash"
         case .deepseekV4ProMax:
@@ -23,11 +23,11 @@ public enum CodexRadarIntelligenceTarget: CaseIterable, Hashable, Sendable {
 
     public var effort: String {
         switch self {
-        case .gpt56SolXhigh:
+        case .gpt6AstraXhigh:
             "xhigh"
-        case .gpt56SolHigh:
+        case .gpt6AstraHigh:
             "high"
-        case .gpt56SolMedium:
+        case .gpt6AstraMedium:
             "medium"
         case .deepseekV4FlashMax, .deepseekV4ProMax:
             "max"

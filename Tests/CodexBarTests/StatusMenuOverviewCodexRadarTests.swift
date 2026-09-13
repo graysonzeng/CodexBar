@@ -284,9 +284,9 @@ extension StatusMenuTests {
           "benchmark_id": "deep-swe",
           "source_updated_at": "2026-08-30T17:38:19+00:00",
           "points": [
-            {"model": "gpt-5.6-sol", "effort": "xhigh", "iq": 100.45, "average_minutes": 24.37},
-            {"model": "gpt-5.6-sol", "effort": "high", "iq": 98.21, "average_minutes": 19.82},
-            {"model": "gpt-5.6-sol", "effort": "medium", "iq": 93.3, "average_minutes": 16.16},
+            {"model": "gpt-6-astra", "effort": "xhigh", "iq": 100.45, "average_minutes": 24.37},
+            {"model": "gpt-6-astra", "effort": "high", "iq": 98.21, "average_minutes": 19.82},
+            {"model": "gpt-6-astra", "effort": "medium", "iq": 93.3, "average_minutes": 16.16},
             {"model": "deepseek-v4-flash", "effort": "max", "iq": 86.16, "average_minutes": 31.39},
             {"model": "deepseek-v4-pro", "effort": "max", "iq": 87.1, "average_minutes": 42.41}
           ]

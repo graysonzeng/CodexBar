@@ -14,9 +14,9 @@ struct OverviewCodexRadarSummaryTests {
 
         #expect(summary.title == Self.updatedTitle(updatedAt))
         #expect(summary.rows.map(\.displayName) == [
-            "Sol xhigh",
-            "Sol high",
-            "Sol medium",
+            "Astra xhigh",
+            "Astra high",
+            "Astra medium",
             "DSV4 Flash max",
             "DSV4 Pro max",
         ])
@@ -36,7 +36,7 @@ struct OverviewCodexRadarSummaryTests {
     func `missing slot is unavailable without inventing zero`() {
         let summary = OverviewCodexRadarSummary(
             snapshot: CodexRadarIntelligenceSnapshot(points: [
-                CodexRadarIntelligencePoint(target: .gpt56SolXhigh, iq: 100.45, averageMinutes: 24.37),
+                CodexRadarIntelligencePoint(target: .gpt6AstraXhigh, iq: 100.45, averageMinutes: 24.37),
             ]))
 
         #expect(summary.rows[0].isAvailable)
@@ -55,8 +55,8 @@ struct OverviewCodexRadarSummaryTests {
         #expect(CodexRadarIntelligence.roundedDisplayInt(1e300) == nil)
         let summary = OverviewCodexRadarSummary(
             snapshot: CodexRadarIntelligenceSnapshot(points: [
-                CodexRadarIntelligencePoint(target: .gpt56SolXhigh, iq: 1e300, averageMinutes: 24),
-                CodexRadarIntelligencePoint(target: .gpt56SolHigh, iq: 98, averageMinutes: 1e300),
+                CodexRadarIntelligencePoint(target: .gpt6AstraXhigh, iq: 1e300, averageMinutes: 24),
+                CodexRadarIntelligencePoint(target: .gpt6AstraHigh, iq: 98, averageMinutes: 1e300),
             ]))
         #expect(!summary.rows[0].isAvailable)
         #expect(summary.rows[0].iq == nil)

@@ -16,8 +16,8 @@ struct UsageStoreCodexRadarTests {
 
         #expect(await transport.requests().count == 1)
         let snapshot = try #require(store.codexRadarSnapshot)
-        #expect(snapshot.point(for: .gpt56SolXhigh).iq == 100.45)
-        #expect(snapshot.point(for: .gpt56SolXhigh).averageMinutes == 24.37)
+        #expect(snapshot.point(for: .gpt6AstraXhigh).iq == 100.45)
+        #expect(snapshot.point(for: .gpt6AstraXhigh).averageMinutes == 24.37)
         #expect(snapshot.sourceUpdatedAt == Date(timeIntervalSince1970: 1_788_111_499))
         #expect(store.codexRadarRevision == 1)
         #expect(store.codexRadarLastSuccessfulFetchAt == now)
@@ -125,7 +125,7 @@ struct UsageStoreCodexRadarTests {
         #expect(await transport.requests().count == 2)
         #expect(store.codexRadarRevision == 1)
         #expect(store.codexRadarLastSuccessfulFetchAt == t0.addingTimeInterval(10))
-        #expect(store.codexRadarSnapshot?.point(for: .gpt56SolHigh).iq == 98.21)
+        #expect(store.codexRadarSnapshot?.point(for: .gpt6AstraHigh).iq == 98.21)
     }
 
     @Test
@@ -140,7 +140,7 @@ struct UsageStoreCodexRadarTests {
         await store.refreshCodexRadarIntelligence(force: true, now: t0.addingTimeInterval(10))
 
         #expect(store.codexRadarRevision == 2)
-        #expect(store.codexRadarSnapshot?.point(for: .gpt56SolXhigh).iq == 101.0)
+        #expect(store.codexRadarSnapshot?.point(for: .gpt6AstraXhigh).iq == 101.0)
         #expect(store.codexRadarLastSuccessfulFetchAt == t0.addingTimeInterval(10))
     }
 
@@ -156,11 +156,11 @@ struct UsageStoreCodexRadarTests {
 
         let snapshot = try #require(store.codexRadarSnapshot)
         #expect(store.codexRadarRevision == 2)
-        #expect(snapshot.point(for: .gpt56SolXhigh).iq == 101.0)
-        #expect(snapshot.point(for: .gpt56SolXhigh).averageMinutes == 25.0)
+        #expect(snapshot.point(for: .gpt6AstraXhigh).iq == 101.0)
+        #expect(snapshot.point(for: .gpt6AstraXhigh).averageMinutes == 25.0)
         #expect(snapshot.point(for: .deepseekV4ProMax).iq == 87.1)
         #expect(snapshot.point(for: .deepseekV4ProMax).averageMinutes == 42.41)
-        #expect(snapshot.point(for: .gpt56SolHigh).iq == 98.21)
+        #expect(snapshot.point(for: .gpt6AstraHigh).iq == 98.21)
     }
 
     @Test
@@ -308,9 +308,9 @@ struct UsageStoreCodexRadarTests {
       "benchmark_id": "deep-swe",
       "source_updated_at": "2026-08-30T17:38:19+00:00",
       "points": [
-        {"model": "gpt-5.6-sol", "effort": "xhigh", "iq": 100.45, "average_minutes": 24.37},
-        {"model": "gpt-5.6-sol", "effort": "high", "iq": 98.21, "average_minutes": 19.82},
-        {"model": "gpt-5.6-sol", "effort": "medium", "iq": 93.3, "average_minutes": 16.16},
+        {"model": "gpt-6-astra", "effort": "xhigh", "iq": 100.45, "average_minutes": 24.37},
+        {"model": "gpt-6-astra", "effort": "high", "iq": 98.21, "average_minutes": 19.82},
+        {"model": "gpt-6-astra", "effort": "medium", "iq": 93.3, "average_minutes": 16.16},
         {"model": "deepseek-v4-flash", "effort": "max", "iq": 86.16, "average_minutes": 31.39},
         {"model": "deepseek-v4-pro", "effort": "max", "iq": 87.1, "average_minutes": 42.41},
         {"model": "dsh-ignored", "effort": "max", "iq": 1, "average_minutes": 1}
@@ -325,9 +325,9 @@ struct UsageStoreCodexRadarTests {
       "benchmark_id": "deep-swe",
       "source_updated_at": "2026-08-30T18:00:00+00:00",
       "points": [
-        {"model": "gpt-5.6-sol", "effort": "xhigh", "iq": 101.0, "average_minutes": 25.0},
-        {"model": "gpt-5.6-sol", "effort": "high", "iq": 98.21, "average_minutes": 19.82},
-        {"model": "gpt-5.6-sol", "effort": "medium", "iq": 93.3, "average_minutes": 16.16},
+        {"model": "gpt-6-astra", "effort": "xhigh", "iq": 101.0, "average_minutes": 25.0},
+        {"model": "gpt-6-astra", "effort": "high", "iq": 98.21, "average_minutes": 19.82},
+        {"model": "gpt-6-astra", "effort": "medium", "iq": 93.3, "average_minutes": 16.16},
         {"model": "deepseek-v4-flash", "effort": "max", "iq": 86.16, "average_minutes": 31.39},
         {"model": "deepseek-v4-pro", "effort": "max", "iq": 87.1, "average_minutes": 42.41}
       ]
@@ -341,9 +341,9 @@ struct UsageStoreCodexRadarTests {
       "benchmark_id": "deep-swe",
       "source_updated_at": "2026-08-30T18:00:00+00:00",
       "points": [
-        {"model": "gpt-5.6-sol", "effort": "xhigh", "iq": 101.0, "average_minutes": 25.0},
-        {"model": "gpt-5.6-sol", "effort": "high", "iq": 98.21, "average_minutes": 19.82},
-        {"model": "gpt-5.6-sol", "effort": "medium", "iq": 93.3, "average_minutes": 16.16},
+        {"model": "gpt-6-astra", "effort": "xhigh", "iq": 101.0, "average_minutes": 25.0},
+        {"model": "gpt-6-astra", "effort": "high", "iq": 98.21, "average_minutes": 19.82},
+        {"model": "gpt-6-astra", "effort": "medium", "iq": 93.3, "average_minutes": 16.16},
         {"model": "deepseek-v4-flash", "effort": "max", "iq": 86.16, "average_minutes": 31.39}
       ]
     }

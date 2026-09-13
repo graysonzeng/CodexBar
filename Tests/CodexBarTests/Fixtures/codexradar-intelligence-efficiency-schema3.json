@@ -18,7 +18,7 @@
       "source_updated_at": "2026-08-29T00:00:00+00:00"
     },
     {
-      "model": "gpt-5.6-sol",
+      "model": "gpt-6-astra",
       "effort": "medium",
       "iq": 93.3,
       "average_minutes": 16.16,
@@ -48,7 +48,7 @@
       "source_updated_at": "2026-08-29T00:35:55+00:00"
     },
     {
-      "model": "gpt-5.6-sol",
+      "model": "gpt-6-astra",
       "effort": "xhigh",
       "iq": 100.45,
       "average_minutes": 24.37,
@@ -68,7 +68,7 @@
       "source_updated_at": "2026-08-28T23:58:49+00:00"
     },
     {
-      "model": "gpt-5.6-sol",
+      "model": "gpt-6-astra",
       "effort": "high",
       "iq": 98.21,
       "average_minutes": 19.82,

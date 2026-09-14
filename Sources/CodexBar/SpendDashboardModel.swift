@@ -563,7 +563,10 @@ struct SpendDashboardModel: Equatable, Sendable {
             models: modelSummary.rows,
             projects: Self.projectRows(summaries: summaries, bounds: bounds, calendar: calendar),
             dailyPoints: dailyPoints,
-            dailySummaries: Self.dailySummaries(summaries: summaries, calendar: calendar),
+            dailySummaries: Self.dailySummaries(
+                summaries: summaries,
+                totalSourceIDs: Set(totalProviders.map(\.id)),
+                calendar: calendar),
             totalTokens: Self.knownIntSum(totalProviders.map(\.totalTokens)),
             totalCost: Self.knownCostSum(totalProviders.map(\.totalCost)),
             coveredDayCount: Self.commonCoverageDayCount(summaries: summaries, calendar: calendar),
@@ -922,6 +925,7 @@ struct SpendDashboardModel: Equatable, Sendable {
 
     private static func dailySummaries(
         summaries: [InputSummary],
+        totalSourceIDs: Set<String>,
         calendar: Calendar) -> [DailySummary]
     {
         guard summaries.contains(where: { $0.totalCost != nil || !$0.entries.isEmpty }),
@@ -935,7 +939,8 @@ struct SpendDashboardModel: Equatable, Sendable {
             let providerRows = indexed.map {
                 Self.dailyProviderRow(summary: $0.summary, entries: $0.entries[day] ?? [])
             }
-            let totalCost = Self.completeCostSum(providerRows.map(\.totalCost))
+            let totalRows = providerRows.filter { totalSourceIDs.contains($0.sourceID) }
+            let totalCost = Self.completeCostSum(totalRows.map(\.totalCost))
 
             let sortedRows = providerRows.enumerated().sorted { lhs, rhs in
                 switch (lhs.element.totalCost, rhs.element.totalCost) {
@@ -949,8 +954,8 @@ struct SpendDashboardModel: Equatable, Sendable {
             result.append(DailySummary(
                 day: day,
                 providers: sortedRows,
-                totalTokens: Self.completeIntSum(providerRows.map(\.totalTokens)),
-                requestCount: Self.completeIntSum(providerRows.map(\.requestCount)),
+                totalTokens: Self.completeIntSum(totalRows.map(\.totalTokens)),
+                requestCount: Self.completeIntSum(totalRows.map(\.requestCount)),
                 totalCost: totalCost))
             guard let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else { return [] }
             day = calendar.startOfDay(for: nextDay)

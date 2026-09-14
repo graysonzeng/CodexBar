@@ -5,7 +5,9 @@ public enum CLIProxyAPISpendError: LocalizedError, Sendable, Equatable {
     case usageStatisticsDisabled
     case unreachable(String)
     case unauthorized
-    case persistFailed(String)
+    case persistFailed(dropped: Int)
+    case storeUnreadable
+    case unsupportedSchema
 
     public var errorDescription: String? {
         switch self {
@@ -19,9 +21,30 @@ public enum CLIProxyAPISpendError: LocalizedError, Sendable, Equatable {
             "CLIProxyAPI is not reachable at \(base)."
         case .unauthorized:
             "CLIProxyAPI management key was rejected. Update the management key and retry."
-        case let .persistFailed(message):
-            "CLIProxyAPI spend store failed: \(message)"
+        case let .persistFailed(dropped):
+            "CLIProxyAPI spend store failed after \(dropped) popped usage-queue event(s) were not saved. "
+                + "Queue consumption is paused to avoid more loss. "
+                + "Turn Track CLIProxyAPI spend off then on after the spend store is writable."
+        case .storeUnreadable:
+            "CLIProxyAPI spend history could not be read. "
+                + "If another CodexBar instance has the store open, quit it and retry."
+        case .unsupportedSchema:
+            "CLIProxyAPI spend history uses an unsupported schema. Update CodexBar and retry."
         }
+    }
+}
+
+public struct CLIProxyAPISpendCollectionFailure: Sendable, Equatable {
+    public let fingerprint: String
+    public let dropped: Int
+
+    public init(fingerprint: String, dropped: Int) {
+        self.fingerprint = fingerprint
+        self.dropped = dropped
+    }
+
+    public var error: CLIProxyAPISpendError {
+        .persistFailed(dropped: self.dropped)
     }
 }
 

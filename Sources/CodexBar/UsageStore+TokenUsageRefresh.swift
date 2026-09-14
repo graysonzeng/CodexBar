@@ -161,8 +161,9 @@ extension UsageStore {
             // Provider-specific by design: CLIProxyAPI publishes cost even when history is empty and
             // maps the snapshot history disclaimer onto the token-error lane.
             if provider == .cliproxyapi {
-                self.publishTokenSnapshot(snapshot, for: provider)
-                self.tokenErrors[provider.instanceID] = Self.cliproxyapiTokenError(from: snapshot)
+                let published = self.cliproxyapiPublishedSnapshot(snapshot)
+                self.publishTokenSnapshot(published, for: provider)
+                self.tokenErrors[provider.instanceID] = Self.cliproxyapiTokenError(from: published)
                 self.tokenFailureGates[provider.instanceID]?.recordSuccess()
                 self.persistWidgetSnapshot(reason: "token-usage")
                 return
@@ -219,7 +220,10 @@ extension UsageStore {
             let hadPriorData = self.tokenSnapshots[provider.instanceID] != nil
             let shouldSurface = self.tokenFailureGates[provider.instanceID]?
                 .shouldSurfaceError(onFailureWithPriorData: hadPriorData) ?? true
-            if shouldSurface {
+            // Provider-specific by design: collection failures remain visible independently of read retry gates.
+            if provider == .cliproxyapi, let failure = self.currentCLIProxyAPICollectionFailure(for: provider) {
+                self.tokenErrors[provider.instanceID] = failure.error.errorDescription
+            } else if shouldSurface {
                 self.tokenErrors[provider.instanceID] = error.localizedDescription
                 self.clearTokenSnapshot(for: provider)
             } else {

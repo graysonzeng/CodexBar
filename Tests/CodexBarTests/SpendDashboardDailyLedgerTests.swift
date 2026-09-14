@@ -253,6 +253,75 @@ struct SpendDashboardDailyLedgerTests {
         #expect(group.dailySummaries.isEmpty)
     }
 
+    @Test(arguments: [UsageProvider.codex, .claude])
+    func `daily ledger excludes gateway overlap while retaining its provider row`(provider: UsageProvider) throws {
+        let entries = [
+            Self.entry(day: "2026-07-14", cost: 1, tokens: 100, requests: 2),
+            Self.entry(day: "2026-07-16", cost: 3, tokens: 300, requests: 4),
+        ]
+        let native = Self.input(
+            id: "native", provider: provider, displayName: "Native", entries: entries, totalTokens: 400)
+        let gateway = Self.input(
+            id: "gateway", provider: .cliproxyapi, displayName: "Gateway", entries: entries, totalTokens: 400)
+        let group = try #require(Self.group(inputs: [native, gateway]))
+
+        #expect(group.totalCost == 4)
+        #expect(group.totalTokens == 400)
+        #expect(group.dailySummaries.map(\.totalCost) == [1, 0, 3])
+        #expect(group.dailySummaries.map(\.totalTokens) == [100, 0, 300])
+        #expect(group.dailySummaries.map(\.requestCount) == [2, 0, 4])
+        #expect(group.dailySummaries.compactMap(\.totalCost).reduce(0, +) == group.totalCost)
+        #expect(group.dailySummaries.compactMap(\.totalTokens).reduce(0, +) == group.totalTokens)
+        #expect(group.dailySummaries.allSatisfy { Set($0.providers.map(\.sourceID)) == ["native", "gateway"] })
+        let gatewayRow = try #require(group.dailySummaries.last?.providers.first { $0.sourceID == "gateway" })
+        #expect(gatewayRow.totalCost == 3)
+        #expect(gatewayRow.totalTokens == 300)
+        #expect(gatewayRow.requestCount == 4)
+    }
+
+    @Test
+    func `daily ledger retains observed totals when gateway is the only source`() throws {
+        let gateway = Self.input(
+            id: "gateway",
+            provider: .cliproxyapi,
+            displayName: "Gateway",
+            entries: [Self.entry(day: "2026-07-16", cost: 2, tokens: 200, requests: 3)],
+            totalTokens: 200)
+        let group = try #require(Self.group(inputs: [gateway]))
+
+        #expect(group.totalCost == 2)
+        #expect(group.totalTokens == 200)
+        #expect(group.dailySummaries.map(\.totalCost) == [0, 0, 2])
+        #expect(group.dailySummaries.map(\.totalTokens) == [0, 0, 200])
+        #expect(group.dailySummaries.map(\.requestCount) == [0, 0, 3])
+        #expect(group.dailySummaries.allSatisfy { $0.providers.map(\.sourceID) == ["gateway"] })
+    }
+
+    @Test
+    func `unknown gateway activity does not hide known billed daily totals`() throws {
+        let native = Self.input(
+            id: "native",
+            provider: .codex,
+            displayName: "Native",
+            entries: [Self.entry(day: "2026-07-16", cost: 2, tokens: 200, requests: 3)],
+            totalTokens: 200)
+        let gateway = Self.input(
+            id: "gateway",
+            provider: .cliproxyapi,
+            displayName: "Gateway",
+            entries: [Self.entry(day: "2026-07-16", cost: 2, tokens: 200, requests: nil)],
+            totalTokens: 999)
+        let group = try #require(Self.group(inputs: [native, gateway]))
+        let day = try #require(group.dailySummaries.last)
+
+        #expect(day.totalCost == 2)
+        #expect(day.totalTokens == 200)
+        #expect(day.requestCount == 3)
+        let gatewayRow = try #require(day.providers.first { $0.sourceID == "gateway" })
+        #expect(gatewayRow.totalTokens == nil)
+        #expect(gatewayRow.requestCount == nil)
+    }
+
     private static func group(inputs: [SpendDashboardModel.ProviderInput]) -> SpendDashboardModel.CurrencyGroup? {
         SpendDashboardModel.build(
             inputs: inputs,

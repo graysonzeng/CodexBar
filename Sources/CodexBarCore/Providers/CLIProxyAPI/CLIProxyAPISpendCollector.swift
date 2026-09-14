@@ -18,6 +18,45 @@ public struct CLIProxyAPISpendCollectorTick: Sendable, Equatable {
     }
 }
 
+public struct CLIProxyAPISpendDrainGate: Sendable, Equatable {
+    public private(set) var failure: CLIProxyAPISpendCollectionFailure?
+
+    public init(failure: CLIProxyAPISpendCollectionFailure? = nil) {
+        self.failure = failure
+    }
+
+    public func isPaused(for fingerprint: String) -> Bool {
+        self.failure?.fingerprint == fingerprint
+    }
+
+    public mutating func resume() {
+        self.failure = nil
+    }
+
+    public mutating func drain(
+        fingerprint: String,
+        operation: @Sendable () async throws -> CLIProxyAPISpendCollectorTick) async throws
+        -> CLIProxyAPISpendCollectorTick
+    {
+        if let failure = self.failure, failure.fingerprint == fingerprint {
+            throw failure.error
+        }
+        if self.failure != nil {
+            self.failure = nil
+        }
+        do {
+            return try await operation()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as CLIProxyAPISpendError {
+            if !Task.isCancelled, case let .persistFailed(dropped) = error, dropped > 0 {
+                self.failure = CLIProxyAPISpendCollectionFailure(fingerprint: fingerprint, dropped: dropped)
+            }
+            throw error
+        }
+    }
+}
+
 public struct CLIProxyAPISpendCollector: Sendable {
     public static let defaultPageSize = 200
     public static let defaultMaxPagesPerTick = 50
@@ -74,7 +113,7 @@ public struct CLIProxyAPISpendCollector: Sendable {
                 dropped += result.dropped
             } catch {
                 dropped += page.events.count
-                throw CLIProxyAPISpendError.persistFailed(error.localizedDescription)
+                throw CLIProxyAPISpendError.persistFailed(dropped: dropped)
             }
             if page.events.count < count {
                 break

@@ -5,14 +5,17 @@ import Foundation
 final class CLIProxyAPIProviderRuntime: ProviderRuntime {
     let id: UsageProvider = .cliproxyapi
     private var collectorTask: Task<Void, Never>?
+    private var drainGate = CLIProxyAPISpendDrainGate()
 
     func start(context: ProviderRuntimeContext) {
         self.reconcile(context: context)
     }
 
-    func stop(context _: ProviderRuntimeContext) {
+    func stop(context: ProviderRuntimeContext) {
         self.collectorTask?.cancel()
         self.collectorTask = nil
+        self.drainGate.resume()
+        context.store.noteCLIProxyAPICollectionFailure(nil, for: .cliproxyapi)
     }
 
     func settingsDidChange(context: ProviderRuntimeContext) {
@@ -49,6 +52,7 @@ final class CLIProxyAPIProviderRuntime: ProviderRuntime {
     }
 
     private func drainOnce(context: ProviderRuntimeContext) async {
+        if Task.isCancelled { return }
         let environment = ProviderRegistry.makeEnvironment(
             base: context.store.environmentBase,
             provider: .cliproxyapi,
@@ -57,16 +61,37 @@ final class CLIProxyAPIProviderRuntime: ProviderRuntime {
         guard CLIProxyAPISettingsReader.spendTrackingEnabled(environment: environment) else { return }
         do {
             let settings = try CLIProxyAPISettingsReader.resolve(environment: environment)
+            let fingerprint = CLIProxyAPISpendSnapshot.fingerprint(settings: settings)
+            if let paused = self.drainGate.failure, paused.fingerprint != fingerprint {
+                self.drainGate.resume()
+                context.store.noteCLIProxyAPICollectionFailure(nil, for: .cliproxyapi)
+            }
+            if self.drainGate.isPaused(for: fingerprint) {
+                return
+            }
             let collector = CLIProxyAPISpendCollector(
                 client: CLIProxyAPIManagementClient(settings: settings),
                 store: CLIProxyAPISpendStore(cacheRoot: CLIProxyAPISpendStore.defaultRootURL()))
-            let tick = try await collector.drainUntilEmpty()
+            var gate = self.drainGate
+            defer {
+                if !Task.isCancelled { self.drainGate = gate }
+            }
+            let tick = try await gate.drain(fingerprint: fingerprint) {
+                try await collector.drainUntilEmpty()
+            }
             if tick.inserted > 0 {
                 await context.store.refreshSpendDashboardTokenUsageNow(for: .cliproxyapi, force: true)
             }
         } catch is CancellationError {
             return
+        } catch let error as CLIProxyAPISpendError {
+            if Task.isCancelled { return }
+            if case .persistFailed = error, let failure = self.drainGate.failure {
+                context.store.noteCLIProxyAPICollectionFailure(failure, for: .cliproxyapi)
+            }
+            await context.store.refreshSpendDashboardTokenUsageNow(for: .cliproxyapi, force: true)
         } catch {
+            if Task.isCancelled { return }
             await context.store.refreshSpendDashboardTokenUsageNow(for: .cliproxyapi, force: true)
         }
     }

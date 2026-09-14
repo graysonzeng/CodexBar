@@ -17,6 +17,16 @@ public enum CLIProxyAPISpendSnapshot {
         customPricing: CostUsageCustomPricing = CostUsageCustomPricing.load(),
         client: CLIProxyAPIManagementClient? = nil) async throws -> CostUsageTokenSnapshot
     {
+        if !CLIProxyAPISettingsReader.spendTrackingEnabled(environment: environment) {
+            return self.emptySnapshot(
+                now: now,
+                historyDays: historyDays,
+                calendar: calendar,
+                label: CLIProxyAPISpendError.trackingDisabled.errorDescription,
+                fingerprint: nil,
+                historyCoverageIsEstablished: false)
+        }
+
         let resolvedStore = store ?? CLIProxyAPISpendStore(cacheRoot: CLIProxyAPISpendStore.defaultRootURL())
         let fingerprint: String? = if let resolvedSettings = try? CLIProxyAPISettingsReader
             .resolve(environment: environment)
@@ -32,18 +42,10 @@ public enum CLIProxyAPISpendSnapshot {
             } else {
                 events = []
             }
+        } catch let error as CLIProxyAPISpendError {
+            throw error
         } catch {
-            throw CLIProxyAPISpendError.persistFailed(error.localizedDescription)
-        }
-
-        if !CLIProxyAPISettingsReader.spendTrackingEnabled(environment: environment) {
-            return self.emptySnapshot(
-                now: now,
-                historyDays: historyDays,
-                calendar: calendar,
-                label: CLIProxyAPISpendError.trackingDisabled.errorDescription,
-                fingerprint: nil,
-                historyCoverageIsEstablished: false)
+            throw CLIProxyAPISpendError.storeUnreadable
         }
 
         let settings: CLIProxyAPISettings
@@ -132,5 +134,34 @@ public enum CLIProxyAPISpendSnapshot {
         let raw = "\(settings.baseURL.absoluteString)|\(settings.managementKey)"
         let digest = SHA256.hash(data: Data(raw.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    public static func overlayingCollectionFailure(
+        _ snapshot: CostUsageTokenSnapshot,
+        failure: CLIProxyAPISpendCollectionFailure?) -> CostUsageTokenSnapshot
+    {
+        guard let failure else { return snapshot }
+        guard let fingerprint = snapshot.credentialScopeFingerprint,
+              fingerprint == failure.fingerprint
+        else { return snapshot }
+        return CostUsageTokenSnapshot(
+            sessionTokens: snapshot.sessionTokens,
+            sessionCostUSD: snapshot.sessionCostUSD,
+            sessionRequests: snapshot.sessionRequests,
+            last30DaysTokens: snapshot.last30DaysTokens,
+            last30DaysCostUSD: snapshot.last30DaysCostUSD,
+            last30DaysRequests: snapshot.last30DaysRequests,
+            currencyCode: snapshot.currencyCode,
+            historyDays: snapshot.historyDays,
+            historyCoverageIsEstablished: snapshot.historyCoverageIsEstablished,
+            historyLabel: failure.error.errorDescription,
+            meteredCostUSD: snapshot.meteredCostUSD,
+            costProvenance: snapshot.costProvenance,
+            credentialScopeFingerprint: snapshot.credentialScopeFingerprint,
+            daily: snapshot.daily,
+            projects: snapshot.projects,
+            sessions: snapshot.sessions,
+            hourly: snapshot.hourly,
+            updatedAt: snapshot.updatedAt)
     }
 }

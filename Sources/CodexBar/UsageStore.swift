@@ -199,6 +199,8 @@ final class UsageStore {
     @ObservationIgnored var sharedSpendDashboardObservationDebounceTask: Task<Void, Never>?
     @ObservationIgnored var sharedSpendDashboardTokenPublicationDebounceTask: Task<Void, Never>?
     var tokenErrors: [ProviderInstanceID: String] = [:]
+    @ObservationIgnored var cliproxyapiCollectionFailure: CLIProxyAPISpendCollectionFailure?
+
     var tokenRefreshInFlight: Set<ProviderInstanceID> = []
     var codexCostCatchUpActivity: CodexCostCatchUpActivity?
     var spendDashboardCodexCostCatchUpActivity: CodexCostCatchUpActivity?

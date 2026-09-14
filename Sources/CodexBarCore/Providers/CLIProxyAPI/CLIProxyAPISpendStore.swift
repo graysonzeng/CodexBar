@@ -45,13 +45,14 @@ public struct CLIProxyAPISpendStore: Sendable {
         guard !fingerprint.isEmpty else {
             return CLIProxyAPISpendInsertResult(inserted: 0, duplicates: 0, dropped: events.count)
         }
-        guard let db = self.open(readOnly: false) else {
-            throw CLIProxyAPISpendError.persistFailed("could not open spend store")
+        let existed = try self.databaseExists()
+        guard let db = try self.open(readOnly: false) else {
+            throw CLIProxyAPISpendError.storeUnreadable
         }
         defer { sqlite3_close(db) }
-        Self.ensureSchema(db)
+        try Self.ensureSchema(db, allowInitialize: !existed)
         guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else {
-            throw CLIProxyAPISpendError.persistFailed("could not begin write")
+            throw CLIProxyAPISpendError.storeUnreadable
         }
         var statement: OpaquePointer?
         let sql = """
@@ -63,7 +64,7 @@ public struct CLIProxyAPISpendStore: Sendable {
         """
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
             _ = sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
-            throw CLIProxyAPISpendError.persistFailed("could not prepare insert")
+            throw CLIProxyAPISpendError.storeUnreadable
         }
         defer { sqlite3_finalize(statement) }
 
@@ -72,25 +73,30 @@ public struct CLIProxyAPISpendStore: Sendable {
         for event in events {
             sqlite3_reset(statement)
             sqlite3_clear_bindings(statement)
-            Self.bind(statement, 1, event.dedupeKey)
-            Self.bind(statement, 2, fingerprint)
-            Self.bind(statement, 3, event.requestID)
-            sqlite3_bind_double(statement, 4, event.occurredAt.timeIntervalSince1970)
-            Self.bind(statement, 5, event.authIndex)
-            Self.bind(statement, 6, event.upstreamProvider)
-            Self.bind(statement, 7, event.model)
-            Self.bind(statement, 8, event.alias)
-            Self.bindOptionalInt(statement, 9, event.tokens.inputTokens)
-            Self.bindOptionalInt(statement, 10, event.tokens.outputTokens)
-            Self.bindOptionalInt(statement, 11, event.tokens.reasoningTokens)
-            Self.bindOptionalInt(statement, 12, event.tokens.cacheReadTokens)
-            Self.bindOptionalInt(statement, 13, event.tokens.cacheCreationTokens)
-            Self.bindOptionalInt(statement, 14, event.tokens.totalTokens)
-            sqlite3_bind_int(statement, 15, event.failed ? 1 : 0)
-            Self.bindOptionalInt(statement, 16, event.statusCode)
+            do {
+                try Self.bind(statement, 1, event.dedupeKey)
+                try Self.bind(statement, 2, fingerprint)
+                try Self.bind(statement, 3, event.requestID)
+                try Self.requireOK(sqlite3_bind_double(statement, 4, event.occurredAt.timeIntervalSince1970))
+                try Self.bind(statement, 5, event.authIndex)
+                try Self.bind(statement, 6, event.upstreamProvider)
+                try Self.bind(statement, 7, event.model)
+                try Self.bind(statement, 8, event.alias)
+                try Self.bindOptionalInt(statement, 9, event.tokens.inputTokens)
+                try Self.bindOptionalInt(statement, 10, event.tokens.outputTokens)
+                try Self.bindOptionalInt(statement, 11, event.tokens.reasoningTokens)
+                try Self.bindOptionalInt(statement, 12, event.tokens.cacheReadTokens)
+                try Self.bindOptionalInt(statement, 13, event.tokens.cacheCreationTokens)
+                try Self.bindOptionalInt(statement, 14, event.tokens.totalTokens)
+                try Self.requireOK(sqlite3_bind_int(statement, 15, event.failed ? 1 : 0))
+                try Self.bindOptionalInt(statement, 16, event.statusCode)
+            } catch {
+                _ = sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+                throw error
+            }
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 _ = sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
-                throw CLIProxyAPISpendError.persistFailed("insert failed")
+                throw CLIProxyAPISpendError.storeUnreadable
             }
             if sqlite3_changes(db) == 0 {
                 duplicates += 1
@@ -100,16 +106,19 @@ public struct CLIProxyAPISpendStore: Sendable {
         }
         guard sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK else {
             _ = sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
-            throw CLIProxyAPISpendError.persistFailed("commit failed")
+            throw CLIProxyAPISpendError.storeUnreadable
         }
         return CLIProxyAPISpendInsertResult(inserted: inserted, duplicates: duplicates, dropped: 0)
     }
 
     public func loadEvents(fingerprint: String) throws -> [CLIProxyAPISpendEvent] {
         guard !fingerprint.isEmpty else { return [] }
-        guard let db = self.open(readOnly: true) else { return [] }
+        guard let db = try self.open(readOnly: true) else { return [] }
         defer { sqlite3_close(db) }
-        guard Self.userVersion(db) == Self.schemaVersion else { return [] }
+        let version = try Self.userVersion(db)
+        guard version == Self.schemaVersion else {
+            throw CLIProxyAPISpendError.unsupportedSchema
+        }
         var statement: OpaquePointer?
         let sql = """
         SELECT request_id, occurred_at, auth_index, upstream_provider, model, alias,
@@ -119,11 +128,14 @@ public struct CLIProxyAPISpendStore: Sendable {
         WHERE credential_scope = ?
         ORDER BY occurred_at ASC, request_id ASC
         """
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw CLIProxyAPISpendError.storeUnreadable
+        }
         defer { sqlite3_finalize(statement) }
-        Self.bind(statement, 1, fingerprint)
+        try Self.bind(statement, 1, fingerprint)
         var events: [CLIProxyAPISpendEvent] = []
-        while sqlite3_step(statement) == SQLITE_ROW {
+        var status = sqlite3_step(statement)
+        while status == SQLITE_ROW {
             events.append(CLIProxyAPISpendEvent(
                 requestID: Self.text(statement, 0) ?? "",
                 occurredAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 1)),
@@ -140,18 +152,37 @@ public struct CLIProxyAPISpendStore: Sendable {
                     totalTokens: Self.optionalInt(statement, 11)),
                 failed: sqlite3_column_int(statement, 12) != 0,
                 statusCode: Self.optionalInt(statement, 13)))
+            status = sqlite3_step(statement)
+        }
+        guard status == SQLITE_DONE else {
+            throw CLIProxyAPISpendError.storeUnreadable
         }
         return events
     }
 
-    private func open(readOnly: Bool) -> OpaquePointer? {
-        if readOnly, !FileManager.default.fileExists(atPath: self.databaseURL.path) {
+    private func databaseExists() throws -> Bool {
+        do {
+            _ = try FileManager.default.attributesOfItem(atPath: self.databaseURL.path)
+            return true
+        } catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {
+            return false
+        } catch {
+            throw CLIProxyAPISpendError.storeUnreadable
+        }
+    }
+
+    private func open(readOnly: Bool) throws -> OpaquePointer? {
+        if readOnly, try !self.databaseExists() {
             return nil
         }
         if !readOnly {
-            try? FileManager.default.createDirectory(
-                at: self.databaseURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(
+                    at: self.databaseURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true)
+            } catch {
+                throw CLIProxyAPISpendError.storeUnreadable
+            }
         }
         var db: OpaquePointer?
         let flags = readOnly
@@ -159,13 +190,7 @@ public struct CLIProxyAPISpendStore: Sendable {
             : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
         guard sqlite3_open_v2(self.databaseURL.path, &db, flags, nil) == SQLITE_OK else {
             sqlite3_close(db)
-            if readOnly { return nil }
-            self.rebuild()
-            guard sqlite3_open_v2(self.databaseURL.path, &db, flags, nil) == SQLITE_OK else {
-                sqlite3_close(db)
-                return nil
-            }
-            return db
+            throw CLIProxyAPISpendError.storeUnreadable
         }
         sqlite3_busy_timeout(db, 250)
         if !readOnly {
@@ -175,12 +200,14 @@ public struct CLIProxyAPISpendStore: Sendable {
         return db
     }
 
-    private func rebuild() {
-        try? FileManager.default.removeItem(at: self.databaseURL)
-    }
-
-    private static func ensureSchema(_ db: OpaquePointer?) {
-        guard self.userVersion(db) == 0 else { return }
+    private static func ensureSchema(_ db: OpaquePointer?, allowInitialize: Bool) throws {
+        let version = try self.userVersion(db)
+        if version == Self.schemaVersion {
+            return
+        }
+        guard version == 0, allowInitialize else {
+            throw version == 0 ? CLIProxyAPISpendError.storeUnreadable : CLIProxyAPISpendError.unsupportedSchema
+        }
         let sql = """
         CREATE TABLE IF NOT EXISTS events (
             dedupe_key TEXT NOT NULL,
@@ -202,36 +229,55 @@ public struct CLIProxyAPISpendStore: Sendable {
             PRIMARY KEY (dedupe_key, credential_scope)
         );
         """
-        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else { return }
-        Self.setUserVersion(db, Self.schemaVersion)
+        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
+            throw CLIProxyAPISpendError.storeUnreadable
+        }
+        try Self.setUserVersion(db, Self.schemaVersion)
+        let written = try self.userVersion(db)
+        guard written == Self.schemaVersion else {
+            throw CLIProxyAPISpendError.storeUnreadable
+        }
     }
 
-    private static func userVersion(_ db: OpaquePointer?) -> Int {
+    private static func userVersion(_ db: OpaquePointer?) throws -> Int {
         var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "PRAGMA user_version", -1, &statement, nil) == SQLITE_OK else { return 0 }
+        guard sqlite3_prepare_v2(db, "PRAGMA user_version", -1, &statement, nil) == SQLITE_OK else {
+            throw CLIProxyAPISpendError.storeUnreadable
+        }
         defer { sqlite3_finalize(statement) }
-        guard sqlite3_step(statement) == SQLITE_ROW else { return 0 }
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            throw CLIProxyAPISpendError.storeUnreadable
+        }
         return Int(sqlite3_column_int(statement, 0))
     }
 
-    private static func setUserVersion(_ db: OpaquePointer?, _ version: Int) {
-        _ = sqlite3_exec(db, "PRAGMA user_version = \(version)", nil, nil, nil)
+    private static func setUserVersion(_ db: OpaquePointer?, _ version: Int) throws {
+        guard sqlite3_exec(db, "PRAGMA user_version = \(version)", nil, nil, nil) == SQLITE_OK else {
+            throw CLIProxyAPISpendError.storeUnreadable
+        }
     }
 
-    private static func bind(_ statement: OpaquePointer?, _ index: Int32, _ value: String?) {
-        guard let value else {
-            sqlite3_bind_null(statement, index)
-            return
+    private static func requireOK(_ status: Int32) throws {
+        guard status == SQLITE_OK else {
+            throw CLIProxyAPISpendError.storeUnreadable
         }
-        sqlite3_bind_text(statement, index, value, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
     }
 
-    private static func bindOptionalInt(_ statement: OpaquePointer?, _ index: Int32, _ value: Int?) {
-        guard let value else {
-            sqlite3_bind_null(statement, index)
+    private static func bind(_ statement: OpaquePointer?, _ index: Int32, _ value: String?) throws {
+        if let value {
+            try self.requireOK(
+                sqlite3_bind_text(statement, index, value, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self)))
             return
         }
-        sqlite3_bind_int64(statement, index, Int64(value))
+        try self.requireOK(sqlite3_bind_null(statement, index))
+    }
+
+    private static func bindOptionalInt(_ statement: OpaquePointer?, _ index: Int32, _ value: Int?) throws {
+        if let value {
+            try self.requireOK(sqlite3_bind_int64(statement, index, Int64(value)))
+            return
+        }
+        try self.requireOK(sqlite3_bind_null(statement, index))
     }
 
     private static func text(_ statement: OpaquePointer?, _ index: Int32) -> String? {

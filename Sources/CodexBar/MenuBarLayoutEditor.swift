@@ -44,6 +44,21 @@ struct MenuBarLayoutDragItem: Codable, Hashable, Transferable, Sendable {
 }
 
 enum MenuBarLayoutPaletteTokens {
+    static func usage(provider: UsageProvider?, snapshot: UsageSnapshot?) -> [MenuBarLayoutToken] {
+        [
+            .percent(window: .session),
+            .percent(window: .weekly),
+            .percent(window: .scopedWeekly),
+        ] + MenuBarLayoutLane.available(for: provider, snapshot: snapshot).map { .lanePercent(lane: $0) }
+            + MenuBarLayoutNamedExtra.availableTokens(provider: provider, snapshot: snapshot) + [
+                .percent(window: .automatic),
+                .usageBar,
+                .pace(window: .session),
+                .pace(window: .weekly),
+                .pace(window: .automatic),
+            ]
+    }
+
     static let time: [MenuBarLayoutToken] = [
         .resetCountdown,
         .resetAbsolute,
@@ -216,7 +231,7 @@ enum MenuBarLayoutEditorPersistence {
     }
 }
 
-private struct MenuBarLayoutPaletteGroup: Identifiable {
+struct MenuBarLayoutPaletteGroup: Identifiable {
     let id: String
     let title: String
     let tokens: [MenuBarLayoutToken]
@@ -301,17 +316,9 @@ struct MenuBarLayoutEditor: View {
             MenuBarLayoutPaletteGroup(
                 id: "usage",
                 title: L("menu_bar_layout_group_usage"),
-                tokens: [
-                    .percent(window: .session),
-                    .percent(window: .weekly),
-                    .percent(window: .scopedWeekly),
-                ] + self.providerLaneTokens + [
-                    .percent(window: .automatic),
-                    .usageBar,
-                    .pace(window: .session),
-                    .pace(window: .weekly),
-                    .pace(window: .automatic),
-                ],
+                tokens: MenuBarLayoutPaletteTokens.usage(
+                    provider: self.persistenceProvider,
+                    snapshot: self.persistenceSnapshot),
                 includesLineBreak: false),
             MenuBarLayoutPaletteGroup(
                 id: "time",
@@ -329,11 +336,6 @@ struct MenuBarLayoutEditor: View {
                 tokens: [.separatorDot, .space],
                 includesLineBreak: true),
         ]
-    }
-
-    private var providerLaneTokens: [MenuBarLayoutToken] {
-        MenuBarLayoutLane.available(for: self.persistenceProvider, snapshot: self.persistenceSnapshot)
-            .map { .lanePercent(lane: $0) }
     }
 
     var body: some View {
@@ -601,16 +603,12 @@ struct MenuBarLayoutEditor: View {
         }
     }
 
-    private func palette(_ group: MenuBarLayoutPaletteGroup) -> some View {
+    func palette(_ group: MenuBarLayoutPaletteGroup) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(group.title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 88), spacing: 6)],
-                alignment: .leading,
-                spacing: 6)
-            {
+            MenuBarLayoutChipFlowLayout(spacing: 6) {
                 ForEach(group.tokens, id: \.self) { token in
                     MenuBarLayoutEditorChip(
                         title: token.editorLabel(
@@ -718,48 +716,10 @@ struct MenuBarLayoutEditor: View {
     }
 
     private var displayOptions: some View {
-        HStack(spacing: 18) {
-            Picker(L("menu_bar_layout_size"), selection: self.sizeBinding) {
-                ForEach(MenuBarLayoutSize.allCases) { size in
-                    Text(size.label).tag(size)
-                }
-            }
-            .pickerStyle(.menu)
-
-            Picker(L("menu_bar_layout_gap"), selection: self.gapBinding) {
-                ForEach(MenuBarLayoutGap.allCases) { gap in
-                    Text(gap.label).tag(gap)
-                }
-            }
-            .pickerStyle(.menu)
-
-            HStack(spacing: 8) {
-                Text(L("menu_bar_layout_vertical_adjustment"))
-                    .lineLimit(1)
-                    .fixedSize()
-
-                TextField(
-                    "",
-                    value: self.$settings.menuBarLayoutVerticalAdjustment,
-                    format: .number)
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-                    .frame(width: 44)
-
-                Stepper(value: self.$settings.menuBarLayoutVerticalAdjustment, in: -20...20, step: 1) {
-                    EmptyView()
-                }
-                .labelsHidden()
-            }
-
-            Spacer()
-
-            Text(L("menu_bar_layout_keyboard_hint"))
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
+        MenuBarLayoutDisplayOptions(
+            size: self.sizeBinding,
+            gap: self.gapBinding,
+            verticalAdjustment: self.$settings.menuBarLayoutVerticalAdjustment)
     }
 
     private func applyPreset(_ preset: MenuBarLayoutPreset) {
@@ -853,7 +813,7 @@ struct MenuBarLayoutChipLabel: View {
 
 /// Left-aligned wrapping row layout for palette chips.
 ///
-/// The conditionals palette holds user-named chips of widely varying width. An adaptive
+/// Palette chips have widely varying localized and user-defined widths. An adaptive
 /// `LazyVGrid` would size them into equal columns and spread the leftover pane width between
 /// them, and a plain `HStack` would push later chips outside the settings pane; this places each
 /// chip at its natural width and wraps to the next row.
@@ -1015,6 +975,11 @@ struct MenuBarLayoutPreview: View {
         let balanceAmounts = MenuBarLayoutBalanceResolver.balanceAmountsUSD(
             provider: provider,
             snapshot: snapshot)
+        let codexCredits = self.store.codexConsumerProjectionIfNeeded(
+            for: provider,
+            surface: .menuBar,
+            snapshotOverride: snapshot,
+            now: now)?.credits?.snapshot
         // Thresholds are USD, and `convertedCost` returns the source amount unchanged when no rate
         // exists, so keep the datum only when the conversion actually landed in USD.
         let toUSD = { (value: Double) -> Double? in
@@ -1034,6 +999,7 @@ struct MenuBarLayoutPreview: View {
             primary: MenuBarLayoutRenderWindow(primary),
             secondary: MenuBarLayoutRenderWindow(secondary),
             tertiary: MenuBarLayoutRenderWindow(tertiary),
+            extraRateWindows: (snapshot.extraRateWindows ?? []).map(MenuBarLayoutRenderExtra.init),
             session: MenuBarLayoutRenderWindow(session),
             weekly: MenuBarLayoutRenderWindow(weekly),
             scopedWeekly: MenuBarLayoutRenderWindow(scopedNamed?.window),
@@ -1060,7 +1026,10 @@ struct MenuBarLayoutPreview: View {
                 dataConfidence: snapshot.dataConfidence,
                 now: now),
             runsOut: runsOut,
-            balance: MenuBarLayoutBalanceResolver.balance(provider: provider, snapshot: snapshot),
+            balance: MenuBarLayoutBalanceResolver.balance(
+                provider: provider,
+                snapshot: snapshot,
+                codexCredits: codexCredits),
             costToday: costToday.map {
                 UsageFormatter.currencyString($0, currencyCode: cost?.currencyCode ?? "USD")
             },
@@ -1125,6 +1094,7 @@ struct MenuBarLayoutPreview: View {
             primary: MenuBarLayoutRenderWindow(session),
             secondary: MenuBarLayoutRenderWindow(weekly),
             tertiary: MenuBarLayoutRenderWindow(scopedWeekly),
+            extraRateWindows: [],
             session: MenuBarLayoutRenderWindow(session),
             weekly: MenuBarLayoutRenderWindow(weekly),
             scopedWeekly: MenuBarLayoutRenderWindow(scopedWeekly),
@@ -1228,6 +1198,9 @@ extension MenuBarLayoutToken {
         if case let .lanePercent(lane) = self {
             return self.laneEditorLabel(lane: lane, provider: provider, snapshot: snapshot)
         }
+        if case let .extraPercent(id) = self, let title = MenuBarLayoutNamedExtra.title(id: id) {
+            return L("%@ %@", title, "%")
+        }
         if let providerLabel = self.providerEditorLabel(provider: provider) {
             return providerLabel
         }
@@ -1235,17 +1208,18 @@ extension MenuBarLayoutToken {
     }
 
     private func providerEditorLabel(provider: UsageProvider?) -> String? {
-        guard let provider,
-              let secondaryLabel = ProviderDescriptorRegistry.descriptor(for: provider).presentation
-                  .menuBarLayoutSecondaryLabel
-        else { return nil }
-        let localizedLabel = L(secondaryLabel)
+        let window: PercentWindow? = switch self {
+        case let .percent(window), let .pace(window),
+             let .windowResetCountdown(window), let .windowResetAbsolute(window): window
+        default: nil
+        }
+        guard let localizedLabel = window?.providerLabel(provider: provider) else { return nil }
         return switch self {
-        case .percent(window: .weekly): L("%@ %@", localizedLabel, "%")
-        case .pace(window: .weekly): L("%@ %@", localizedLabel, L("display_mode_pace").lowercased())
-        case .windowResetCountdown(window: .weekly):
+        case .percent: L("%@ %@", localizedLabel, "%")
+        case .pace: L("%@ %@", localizedLabel, L("display_mode_pace").lowercased())
+        case .windowResetCountdown:
             L("%@: %@", localizedLabel, L("menu_bar_layout_token_resets_in"))
-        case .windowResetAbsolute(window: .weekly):
+        case .windowResetAbsolute:
             L("%@: %@", localizedLabel, L("menu_bar_layout_token_reset_at"))
         default: nil
         }
@@ -1261,6 +1235,7 @@ extension MenuBarLayoutToken {
         case .percent(window: .scopedWeekly): L("menu_bar_layout_token_scoped_weekly")
         case .percent(window: .automatic): L("menu_bar_layout_token_auto")
         case let .lanePercent(lane): L("%@ %@", lane.rawValue.capitalized, "%")
+        case .extraPercent: L("%@ %@", L("Usage"), "%")
         case .pace(window: .session): L("menu_bar_layout_token_session_pace")
         case .pace(window: .weekly): L("menu_bar_layout_token_weekly_pace")
         case .pace(window: .scopedWeekly): L("menu_bar_layout_token_weekly_pace")
@@ -1316,7 +1291,7 @@ extension MenuBarLayoutToken {
         case .icon: "app.dashed"
         case .providerName: "textformat"
         case .accountLabel: "person.crop.circle"
-        case .percent, .lanePercent: "percent"
+        case .percent, .lanePercent, .extraPercent: "percent"
         case .pace: "speedometer"
         case .usageBar: "chart.bar.fill"
         case .resetCountdown, .windowResetCountdown: "timer"
@@ -1329,6 +1304,71 @@ extension MenuBarLayoutToken {
         case .space: "space"
         case .conditional: "switch.2"
         case .hidden: "eye.slash"
+        }
+    }
+}
+
+/// Size, gap, and vertical-offset controls. Pickers stay at their ideal width so the
+/// current selection is always visible without opening the menu.
+struct MenuBarLayoutDisplayOptions: View {
+    @Binding var size: MenuBarLayoutSize
+    @Binding var gap: MenuBarLayoutGap
+    @Binding var verticalAdjustment: Int
+
+    var body: some View {
+        HStack(spacing: 18) {
+            HStack(spacing: 8) {
+                Text(L("menu_bar_layout_size"))
+                    .lineLimit(1)
+                    .fixedSize()
+
+                Picker(L("menu_bar_layout_size"), selection: self.$size) {
+                    ForEach(MenuBarLayoutSize.allCases) { size in
+                        Text(size.label).tag(size)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+
+            HStack(spacing: 8) {
+                Text(L("menu_bar_layout_gap"))
+                    .lineLimit(1)
+                    .fixedSize()
+
+                Picker(L("menu_bar_layout_gap"), selection: self.$gap) {
+                    ForEach(MenuBarLayoutGap.allCases) { gap in
+                        Text(gap.label).tag(gap)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+
+            HStack(spacing: 8) {
+                Text(L("menu_bar_layout_vertical_adjustment"))
+                    .lineLimit(1)
+                    .fixedSize()
+
+                TextField(
+                    "",
+                    value: self.$verticalAdjustment,
+                    format: .number)
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.trailing)
+                    .monospacedDigit()
+                    .frame(width: 44)
+
+                Stepper(value: self.$verticalAdjustment, in: -20...20, step: 1) {
+                    EmptyView()
+                }
+                .labelsHidden()
+            }
+
+            Spacer()
         }
     }
 }

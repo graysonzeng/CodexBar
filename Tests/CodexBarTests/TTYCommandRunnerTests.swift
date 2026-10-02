@@ -641,7 +641,7 @@ struct TTYCommandRunnerEnvTests {
 
     @Test
     func `rolling buffer detects needle across boundary`() {
-        var scanner = TTYCommandRunner.RollingBuffer(maxNeedle: 6)
+        var scanner = StreamScanBuffer(maxNeedle: 6)
         let needle = Data("hello".utf8)
         let first = scanner.append(Data("he".utf8))
         #expect(first.range(of: needle) == nil)
@@ -652,7 +652,41 @@ struct TTYCommandRunnerEnvTests {
     @Test
     func `lowercased ASCII only touches ascii`() {
         let data = Data("UpDaTe".utf8)
-        let lowered = TTYCommandRunner.lowercasedASCII(data)
+        let lowered = StreamScanBuffer.lowercasedASCII(data)
         #expect(String(data: lowered, encoding: .utf8) == "update")
+    }
+
+    @Test
+    func `bundled helper resolves from app executable and symlinks`() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("helper-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: root) }
+        let contents = root.appendingPathComponent("Test.app/Contents", isDirectory: true)
+        let macOS = contents.appendingPathComponent("MacOS", isDirectory: true)
+        let helpers = contents.appendingPathComponent("Helpers", isDirectory: true)
+        try fm.createDirectory(at: macOS, withIntermediateDirectories: true)
+        try fm.createDirectory(at: helpers, withIntermediateDirectories: true)
+        let helper = helpers.appendingPathComponent("Watchdog")
+        let cli = helpers.appendingPathComponent("Tool")
+        let gui = macOS.appendingPathComponent("Test")
+        for url in [helper, cli, gui] {
+            try Data("#!/bin/sh\n".utf8).write(to: url)
+            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        }
+        let link = root.appendingPathComponent("tool-link")
+        try fm.createSymbolicLink(at: link, withDestinationURL: cli)
+
+        let expected = helper.resolvingSymlinksInPath().path
+        for exe in [gui, cli, link] {
+            let found = TTYCommandRunner.bundledHelperPath("Watchdog", executableURL: exe)
+            #expect(found.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path } == expected)
+        }
+        #expect(TTYCommandRunner.bundledHelperPath("Missing", executableURL: gui) == nil)
+        #expect(TTYCommandRunner
+            .bundledHelperPath("Watchdog", executableURL: root.appendingPathComponent("bare")) == nil)
+        for layout in ["Other/MacOS/Tool", "Contents/Other/Tool"] {
+            #expect(TTYCommandRunner.bundledHelperPath(
+                "Watchdog", executableURL: contents.deletingLastPathComponent().appendingPathComponent(layout)) == nil)
+        }
     }
 }

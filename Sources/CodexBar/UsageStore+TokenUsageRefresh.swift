@@ -10,10 +10,14 @@ extension UsageStore {
             return
         }
 
+        guard await self.refreshPiHistoryScope(for: provider) else { return }
+
         guard !self.tokenRefreshInFlight.contains(provider.instanceID) else { return }
 
         let now = Date()
-        let historyDays = self.settings.costUsageHistoryDays
+        let historyDays = self.settings.costReportingPeriod.days(
+            now: now,
+            calendar: self.settings.costUsageBucketCalendar)
         // Cursor cost reuses the status cookie policy: a Manual source forwards the manual header so
         // cost and status share the same session; other sources fall back to auto resolution.
         guard case let .proceed(cursorCookieHeaderOverride) = self.prepareCursorCostCookie(for: provider) else {
@@ -21,8 +25,11 @@ extension UsageStore {
         }
         let costScope = self.tokenCostScope(for: provider)
         let costScopeSignature = self.tokenSnapshotScopeSignature(for: provider)
-        let publicationRevision = self.providerPublicationRevision(for: provider)
-        let providerConfigRevision = self.settings.providerConfigRevision(for: provider)
+        let publicationScope = self.tokenRefreshPublicationScope(
+            for: provider, historyDays: historyDays, costScopeSignature: costScopeSignature)
+        if !force, self.tokenRefreshFailureIsCoolingDown(provider: provider, now: now) {
+            return
+        }
         if !force, self.tokenRefreshCanReuseCurrentSnapshot(
             provider: provider,
             now: now,
@@ -30,6 +37,7 @@ extension UsageStore {
         {
             return
         }
+        self.tokenFetchFailureCooldowns.removeValue(forKey: provider.instanceID)
         self.lastTokenFetchAt[provider.instanceID] = now
         self.lastTokenFetchScope[provider.instanceID] = costScopeSignature
         self.tokenRefreshInFlight.insert(provider.instanceID)
@@ -44,16 +52,71 @@ extension UsageStore {
             return
         }
 
-        await self.fetchAndPublishTokenUsage(TokenUsageRefreshRequest(
+        let startedAt = Date()
+        self.tokenCostLogger
+            .debug("cost usage start provider=\(provider.rawValue) force=\(force)")
+        let refreshContext = TokenUsageRefreshContext(
             provider: provider,
-            force: force,
             now: now,
             historyDays: historyDays,
-            cursorCookieHeaderOverride: cursorCookieHeaderOverride,
-            codexHomePath: costScope.codexHomePath,
             costScopeSignature: costScopeSignature,
-            publicationRevision: publicationRevision,
-            providerConfigRevision: providerConfigRevision))
+            publicationScope: publicationScope,
+            startedAt: startedAt)
+
+        do {
+            // Codex cost usage scans the explicit token-cost scope: selected managed account by
+            // default, or this Mac's ambient Codex home when the local ledger is enabled.
+            let result = try await self.loadTokenUsageSnapshot(
+                provider: provider,
+                force: force,
+                now: now,
+                codexHomePath: costScope.codexHomePath,
+                historyDays: historyDays,
+                cursorCookieHeaderOverride: cursorCookieHeaderOverride,
+                includePiSessions: self.shouldIncludePiSessionsInTokenSnapshot(for: provider))
+            try self.commitTokenUsageResult(result, context: refreshContext)
+        } catch {
+            guard self.tokenRefreshPublicationDisposition(
+                provider: provider,
+                scope: publicationScope) == .current
+            else {
+                self.clearTokenFetchMetadataIfMatching(
+                    provider: provider,
+                    attemptedAt: now,
+                    costScopeSignature: costScopeSignature)
+                self.requestTokenRefreshAfterStaleCompletion(for: provider)
+                return
+            }
+            let cancelled = Task.isCancelled || error is CancellationError
+            let retryDelay = Self.tokenFetchFailureRetryDelay(error, ttl: self.tokenFetchTTL)
+            if cancelled || retryDelay == nil {
+                self.clearTokenFetchMetadataIfMatching(
+                    provider: provider,
+                    attemptedAt: now,
+                    costScopeSignature: costScopeSignature)
+            } else if let retryDelay {
+                self.tokenFetchFailureCooldowns[provider.instanceID] = TokenFetchFailureCooldown(
+                    attemptedAt: now, retryAfter: now.addingTimeInterval(retryDelay), scope: publicationScope)
+            }
+            if cancelled { return }
+            let duration = Date().timeIntervalSince(startedAt)
+            let msg = error.localizedDescription
+            let durationText = String(format: "%.2f", duration)
+            let message = "cost usage failed provider=\(provider.rawValue) duration=\(durationText)s error=\(msg)"
+            self.tokenCostLogger.error(message)
+            let hadPriorData = self.tokenSnapshotPublications[provider.instanceID]?.snapshot != nil
+            let shouldSurface = self.tokenFailureGates[provider.instanceID]?
+                .shouldSurfaceError(onFailureWithPriorData: hadPriorData) ?? true
+            // Provider-specific by design: collection failures remain visible independently of read retry gates.
+            if provider == .cliproxyapi, let failure = self.currentCLIProxyAPICollectionFailure(for: provider) {
+                self.tokenErrors[provider.instanceID] = failure.error.errorDescription
+            } else if shouldSurface {
+                self.tokenErrors[provider.instanceID] = error.localizedDescription
+                self.clearTokenSnapshot(for: provider)
+            } else {
+                self.tokenErrors[provider.instanceID] = nil
+            }
+        }
     }
 
     /// Completes refreshes that must not hit the network. Returns true when
@@ -96,197 +159,5 @@ extension UsageStore {
         }
 
         return false
-    }
-
-    private struct TokenUsageRefreshRequest {
-        let provider: UsageProvider
-        let force: Bool
-        let now: Date
-        let historyDays: Int
-        let cursorCookieHeaderOverride: String?
-        let codexHomePath: String?
-        let costScopeSignature: String
-        let publicationRevision: ProviderPublicationRevision
-        let providerConfigRevision: UInt64
-    }
-
-    private func fetchAndPublishTokenUsage(_ request: TokenUsageRefreshRequest) async {
-        let provider = request.provider
-        let force = request.force
-        let now = request.now
-        let historyDays = request.historyDays
-        let cursorCookieHeaderOverride = request.cursorCookieHeaderOverride
-        let codexHomePath = request.codexHomePath
-        let costScopeSignature = request.costScopeSignature
-        let publicationRevision = request.publicationRevision
-        let providerConfigRevision = request.providerConfigRevision
-        let startedAt = Date()
-        self.tokenCostLogger
-            .debug("cost usage start provider=\(provider.rawValue) force=\(force)")
-
-        do {
-            // Codex cost usage scans the explicit token-cost scope: selected managed account by
-            // default, or this Mac's ambient Codex home when the local ledger is enabled.
-            let snapshot = try await self.loadTokenUsageSnapshot(
-                provider: provider,
-                force: force,
-                now: now,
-                codexHomePath: codexHomePath,
-                historyDays: historyDays,
-                cursorCookieHeaderOverride: cursorCookieHeaderOverride)
-            try Task.checkCancellation()
-            let completedCostScopeSignature = self.completedTokenCostScopeSignature(
-                provider: provider,
-                historyDays: historyDays,
-                initialSignature: costScopeSignature,
-                snapshot: snapshot)
-            guard self.tokenRefreshPublicationIsCurrent(
-                provider: provider,
-                publicationRevision: publicationRevision,
-                providerConfigRevision: providerConfigRevision,
-                historyDays: historyDays,
-                costScopeSignature: costScopeSignature,
-                fetchedCredentialScopeFingerprint: snapshot.credentialScopeFingerprint)
-            else {
-                self.clearTokenFetchMetadataIfMatching(
-                    provider: provider,
-                    attemptedAt: now,
-                    costScopeSignature: costScopeSignature)
-                self.requestTokenRefreshAfterStaleCompletion(for: provider)
-                return
-            }
-            self.lastTokenFetchScope[provider.instanceID] = completedCostScopeSignature
-            self.startCodexCostCatchUpIfNeeded(afterRefreshing: provider)
-
-            // Provider-specific by design: CLIProxyAPI publishes cost even when history is empty and
-            // maps the snapshot history disclaimer onto the token-error lane.
-            if provider == .cliproxyapi {
-                let published = self.cliproxyapiPublishedSnapshot(snapshot)
-                self.publishTokenSnapshot(published, for: provider)
-                self.tokenErrors[provider.instanceID] = Self.cliproxyapiTokenError(from: published)
-                self.tokenFailureGates[provider.instanceID]?.recordSuccess()
-                self.persistWidgetSnapshot(reason: "token-usage")
-                return
-            }
-
-            if try self.regularTokenSnapshotIsConfirmedEmpty(snapshot, for: provider) {
-                self.publishConfirmedEmptyTokenSnapshot(for: provider)
-                self.tokenErrors[provider.instanceID] = Self.tokenCostNoDataMessage(for: provider)
-                self.tokenFailureGates[provider.instanceID]?.recordSuccess()
-                return
-            }
-            self.logTokenUsageSuccess(
-                provider: provider,
-                snapshot: snapshot,
-                historyDays: historyDays,
-                startedAt: startedAt)
-            self.publishTokenSnapshot(snapshot, for: provider)
-            self.tokenErrors[provider.instanceID] = nil
-            self.tokenFailureGates[provider.instanceID]?.recordSuccess()
-            self.persistWidgetSnapshot(reason: "token-usage")
-        } catch {
-            guard self.tokenRefreshPublicationIsCurrent(
-                provider: provider,
-                publicationRevision: publicationRevision,
-                providerConfigRevision: providerConfigRevision,
-                historyDays: historyDays,
-                costScopeSignature: costScopeSignature)
-            else {
-                self.clearTokenFetchMetadataIfMatching(
-                    provider: provider,
-                    attemptedAt: now,
-                    costScopeSignature: costScopeSignature)
-                self.requestTokenRefreshAfterStaleCompletion(for: provider)
-                return
-            }
-            if error is CancellationError {
-                self.clearTokenFetchMetadataIfMatching(
-                    provider: provider,
-                    attemptedAt: now,
-                    costScopeSignature: costScopeSignature)
-                return
-            }
-            let duration = Date().timeIntervalSince(startedAt)
-            let msg = error.localizedDescription
-            let durationText = String(format: "%.2f", duration)
-            let message = "cost usage failed provider=\(provider.rawValue) duration=\(durationText)s error=\(msg)"
-            self.tokenCostLogger.error(message)
-            if Self.tokenFetchFailureAllowsEarlyRetry(error) {
-                self.clearTokenFetchMetadataIfMatching(
-                    provider: provider,
-                    attemptedAt: now,
-                    costScopeSignature: costScopeSignature)
-            }
-            let hadPriorData = self.tokenSnapshots[provider.instanceID] != nil
-            let shouldSurface = self.tokenFailureGates[provider.instanceID]?
-                .shouldSurfaceError(onFailureWithPriorData: hadPriorData) ?? true
-            // Provider-specific by design: collection failures remain visible independently of read retry gates.
-            if provider == .cliproxyapi, let failure = self.currentCLIProxyAPICollectionFailure(for: provider) {
-                self.tokenErrors[provider.instanceID] = failure.error.errorDescription
-            } else if shouldSurface {
-                self.tokenErrors[provider.instanceID] = error.localizedDescription
-                self.clearTokenSnapshot(for: provider)
-            } else {
-                self.tokenErrors[provider.instanceID] = nil
-            }
-        }
-    }
-
-    private func resetTokenUsageState(for provider: UsageProvider) {
-        // Provider-specific by design: resetting Codex token state also cancels its two ledger catch-up workflows.
-        if provider == .codex {
-            self.cancelCodexCostCatchUp()
-            self.cancelSpendDashboardCodexCostCatchUp()
-        }
-        self.clearTokenSnapshot(for: provider)
-        self.clearSpendDashboardTokenSnapshot(for: provider)
-        self.tokenErrors[provider.instanceID] = nil
-        self.tokenFailureGates[provider.instanceID]?.reset()
-        self.lastTokenFetchAt.removeValue(forKey: provider.instanceID)
-        self.lastTokenFetchScope.removeValue(forKey: provider.instanceID)
-        self.lastSpendDashboardTokenFetchAt.removeValue(forKey: provider.instanceID)
-        self.lastSpendDashboardTokenFetchScope.removeValue(forKey: provider.instanceID)
-    }
-
-    private func logTokenUsageSuccess(
-        provider: UsageProvider,
-        snapshot: CostUsageTokenSnapshot,
-        historyDays: Int,
-        startedAt: Date)
-    {
-        let durationText = String(format: "%.2f", Date().timeIntervalSince(startedAt))
-        let sessionCost = snapshot.sessionCostUSD
-            .map { UsageFormatter.currencyString($0, currencyCode: snapshot.currencyCode) } ?? "—"
-        let monthCost = snapshot.last30DaysCostUSD
-            .map { UsageFormatter.currencyString($0, currencyCode: snapshot.currencyCode) } ?? "—"
-        let message =
-            "cost usage success provider=\(provider.rawValue) " +
-            "duration=\(durationText)s " +
-            "today=\(sessionCost) " +
-            "historyDays=\(historyDays) windowCost=\(monthCost)"
-        self.tokenCostLogger.info(message)
-    }
-
-    private func clearTokenFetchMetadataIfMatching(
-        provider: UsageProvider,
-        attemptedAt: Date,
-        costScopeSignature: String)
-    {
-        guard self.lastTokenFetchAt[provider.instanceID] == attemptedAt,
-              self.lastTokenFetchScope[provider.instanceID] == costScopeSignature
-        else {
-            return
-        }
-        self.lastTokenFetchAt.removeValue(forKey: provider.instanceID)
-        self.lastTokenFetchScope.removeValue(forKey: provider.instanceID)
-    }
-
-    /// Fast failures may retry on the next scheduled pass instead of waiting out the fetch
-    /// TTL; timed-out scans keep the TTL so a slow corpus cannot thrash back-to-back rescans.
-    nonisolated static func tokenFetchFailureAllowsEarlyRetry(_ error: Error) -> Bool {
-        if case CostUsageError.timedOut = error {
-            return false
-        }
-        return true
     }
 }

@@ -83,7 +83,7 @@ public enum DeepSeekProviderDescriptor {
                 toggleTitle: "Show DeepSeek usage",
                 cliName: "deepseek",
                 defaultEnabled: false,
-                widgetSelectable: false,
+                widgetSelectable: true,
                 isPrimaryProvider: false,
                 usesAccountFallback: false,
                 balanceOnly: true,
@@ -95,13 +95,13 @@ public enum DeepSeekProviderDescriptor {
             branding: ProviderBranding(
                 iconStyle: .init(provider: .deepseek),
                 iconResourceName: "ProviderIcon-deepseek",
-                color: ProviderColor(red: 0.32, green: 0.49, blue: 0.94),
+                color: ProviderColor(hex: 0x4D6BFE),
                 confettiPalette: [
                     ProviderColor(hex: 0x4D6BFE),
                     ProviderColor(hex: 0x3982FF),
                     ProviderColor(hex: 0x020E36),
                 ],
-                widgetColor: ProviderColor(red: 82 / 255, green: 125 / 255, blue: 240 / 255)),
+                widgetColor: ProviderColor(hex: 0x527DF0)),
             tokenCost: ProviderTokenCostConfig(
                 supportsTokenCost: false,
                 noDataMessage: { "DeepSeek per-day cost history is not available via API." }),
@@ -139,6 +139,7 @@ public enum DeepSeekProviderDescriptor {
                     movePrimaryDetailToStatus: { _ in true }),
                 menu: ProviderMenuDescriptorPresentation(primaryDescriptionIsDetail: { _ in true }),
                 optionalDetails: ProviderOptionalDetailsPresentation(
+                    hidesAllWithoutOptionalUsage: true,
                     costSummaryTitles: ["Usage", "Spend"])),
             fetchPlan: ProviderFetchPlan(
                 sourceModes: [.auto, .api, .web],
@@ -270,6 +271,7 @@ public enum DeepSeekProviderDescriptor {
             usageSummary: resolution.selectedSummary,
             detailedUsageState: resolution.detailedUsageState,
             platformProfiles: resolution.profiles,
+            platformBalanceOwner: balance.platformBalanceOwner,
             updatedAt: balance.updatedAt).toUsageSnapshot()
     }
 
@@ -307,12 +309,21 @@ public enum DeepSeekProviderDescriptor {
         case let .value(value):
             resolution = value
         case .timedOut:
-            throw DeepSeekUsageError.networkError("Chrome session resolution timed out")
+            let timeout = DeepSeekUsageError.networkError("Chrome session resolution timed out")
+            if let transport = DeepSeekPlatformTransportError(
+                owner: nil,
+                underlyingError: URLError(.timedOut),
+                description: timeout.localizedDescription)
+            {
+                throw transport
+            }
+            throw timeout
         case let .failure(error):
             throw error
         }
         try Task.checkCancellation()
         if resolution.selectedBalance == nil, resolution.detailedUsageState == .unavailable {
+            if let error = resolution.selectedTransportError { throw error }
             throw DeepSeekUsageError.networkError("Chrome session resolution unavailable")
         }
         let balance = resolution.selectedBalance ?? DeepSeekUsageSnapshot(

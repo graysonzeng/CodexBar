@@ -60,8 +60,6 @@ struct CopilotAPIKeyFallbackTests {
         let settings = Self.makeSettingsStore(suite: "copilot-api-key-loader")
         settings.copilotAPIToken = "gh_token_123"
 
-        settings.ensureCopilotAPITokenLoaded()
-
         #expect(settings.copilotAPIToken == "gh_token_123")
         #expect(settings.tokenAccounts(for: .copilot).isEmpty)
     }
@@ -72,8 +70,6 @@ struct CopilotAPIKeyFallbackTests {
         settings.copilotAPIToken = "gh_token_old"
         settings.addTokenAccount(provider: .copilot, label: "existing", token: "gh_token_existing")
 
-        settings.ensureCopilotAPITokenLoaded()
-
         #expect(settings.tokenAccounts(for: .copilot).count == 1)
         #expect(settings.copilotAPIToken.isEmpty)
         #expect(settings.copilotSettingsSnapshot(tokenOverride: nil).apiToken == "gh_token_existing")
@@ -81,22 +77,7 @@ struct CopilotAPIKeyFallbackTests {
     }
 
     private static func makeSettingsStore(suite: String) -> SettingsStore {
-        SettingsStore(
-            configStore: testConfigStore(suiteName: suite),
-            zaiTokenStore: NoopZaiTokenStore(),
-            syntheticTokenStore: NoopSyntheticTokenStore(),
-            codexCookieStore: InMemoryCookieHeaderStore(),
-            claudeCookieStore: InMemoryCookieHeaderStore(),
-            cursorCookieStore: InMemoryCookieHeaderStore(),
-            opencodeCookieStore: InMemoryCookieHeaderStore(),
-            factoryCookieStore: InMemoryCookieHeaderStore(),
-            minimaxCookieStore: InMemoryMiniMaxCookieStore(),
-            minimaxAPITokenStore: InMemoryMiniMaxAPITokenStore(),
-            kimiTokenStore: InMemoryKimiTokenStore(),
-            augmentCookieStore: InMemoryCookieHeaderStore(),
-            ampCookieStore: InMemoryCookieHeaderStore(),
-            copilotTokenStore: InMemoryCopilotTokenStore(),
-            tokenAccountStore: InMemoryTokenAccountStore())
+        testSettingsStore(suiteName: suite, userDefaults: InMemoryUserDefaults())
     }
 }
 
@@ -151,22 +132,7 @@ struct CopilotEnvironmentPrecedenceTests {
     }
 
     private static func makeSettingsStore(suite: String) -> SettingsStore {
-        SettingsStore(
-            configStore: testConfigStore(suiteName: suite),
-            zaiTokenStore: NoopZaiTokenStore(),
-            syntheticTokenStore: NoopSyntheticTokenStore(),
-            codexCookieStore: InMemoryCookieHeaderStore(),
-            claudeCookieStore: InMemoryCookieHeaderStore(),
-            cursorCookieStore: InMemoryCookieHeaderStore(),
-            opencodeCookieStore: InMemoryCookieHeaderStore(),
-            factoryCookieStore: InMemoryCookieHeaderStore(),
-            minimaxCookieStore: InMemoryMiniMaxCookieStore(),
-            minimaxAPITokenStore: InMemoryMiniMaxAPITokenStore(),
-            kimiTokenStore: InMemoryKimiTokenStore(),
-            augmentCookieStore: InMemoryCookieHeaderStore(),
-            ampCookieStore: InMemoryCookieHeaderStore(),
-            copilotTokenStore: InMemoryCopilotTokenStore(),
-            tokenAccountStore: InMemoryTokenAccountStore())
+        testSettingsStore(suiteName: suite, userDefaults: InMemoryUserDefaults())
     }
 }
 
@@ -570,22 +536,7 @@ struct CopilotExternalIdentifierTests {
     }
 
     private static func makeSettingsStore(suite: String) -> SettingsStore {
-        SettingsStore(
-            configStore: testConfigStore(suiteName: suite),
-            zaiTokenStore: NoopZaiTokenStore(),
-            syntheticTokenStore: NoopSyntheticTokenStore(),
-            codexCookieStore: InMemoryCookieHeaderStore(),
-            claudeCookieStore: InMemoryCookieHeaderStore(),
-            cursorCookieStore: InMemoryCookieHeaderStore(),
-            opencodeCookieStore: InMemoryCookieHeaderStore(),
-            factoryCookieStore: InMemoryCookieHeaderStore(),
-            minimaxCookieStore: InMemoryMiniMaxCookieStore(),
-            minimaxAPITokenStore: InMemoryMiniMaxAPITokenStore(),
-            kimiTokenStore: InMemoryKimiTokenStore(),
-            augmentCookieStore: InMemoryCookieHeaderStore(),
-            ampCookieStore: InMemoryCookieHeaderStore(),
-            copilotTokenStore: InMemoryCopilotTokenStore(),
-            tokenAccountStore: InMemoryTokenAccountStore())
+        testSettingsStore(suiteName: suite, userDefaults: InMemoryUserDefaults())
     }
 }
 

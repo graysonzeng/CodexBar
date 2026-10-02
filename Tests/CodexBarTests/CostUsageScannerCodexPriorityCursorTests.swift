@@ -1237,16 +1237,18 @@ extension CostUsageScannerCodexPriorityCursorTests {
         let firstCursor = try #require(CostUsageStoreAccess.read(cacheRoot: env.cacheRoot).codexPriorityTurnsCursor)
         #expect(firstCursor.lastRowID == 1)
 
-        var persistedFileCount = 0
-        CostUsageStore.saveCycleCheckpointForTesting = { _ in persistedFileCount += 1 }
-        defer { CostUsageStore.saveCycleCheckpointForTesting = nil }
+        let persistedFileCount = CostUsageTestCounter()
+        var hooks = CostUsageStoreTestHooks.current
+        hooks.saveCycleCheckpoint = { _ in persistedFileCount.increment() }
 
         try CostUsageScannerCodexPriorityTests.insertTestLogs(dbURL: dbURL, rows: (0..<3).map { index in
             (epochSeconds: epoch, body: "routine trace row \(index)")
         })
-        Self.loadCodexDailyReport(env: env, databaseURL: dbURL, now: now.addingTimeInterval(2))
+        CostUsageStoreTestHooks.$current.withValue(hooks) {
+            _ = Self.loadCodexDailyReport(env: env, databaseURL: dbURL, now: now.addingTimeInterval(2))
+        }
 
-        #expect(persistedFileCount == 0)
+        #expect(persistedFileCount.value == 0)
         let reloaded = try #require(CostUsageStoreAccess.read(cacheRoot: env.cacheRoot).codexPriorityTurnsCursor)
         #expect(reloaded.lastRowID == firstCursor.lastRowID + 3)
         #expect(reloaded.turns.keys.sorted() == ["turn-a"])
@@ -1450,7 +1452,7 @@ extension CostUsageScannerCodexPriorityCursorTests {
             options: options)
     }
 
-    private static func priorityRequestBody(
+    static func priorityRequestBody(
         threadID: String,
         turnID: String,
         model: String = "gpt-5.5") -> String
@@ -1609,7 +1611,7 @@ extension CostUsageScannerCodexPriorityCursorTests {
         guard sqlite3_step(statement) == SQLITE_DONE else { throw SQLiteTestError.step }
     }
 
-    private static func deleteTestLog(dbURL: URL, rowID: Int64) throws {
+    static func deleteTestLog(dbURL: URL, rowID: Int64) throws {
         var db: OpaquePointer?
         guard sqlite3_open(dbURL.path, &db) == SQLITE_OK else { throw SQLiteTestError.open }
         defer { sqlite3_close(db) }

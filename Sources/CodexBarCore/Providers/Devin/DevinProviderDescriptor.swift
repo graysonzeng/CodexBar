@@ -1,13 +1,12 @@
 import Foundation
-import SweetCookieKit
 
 public enum DevinProviderDescriptor {
     public static let descriptor: ProviderDescriptor = Self.makeDescriptor()
 
-    /// Devin sessions are normally in Chrome; explicit selection handles other browsers.
+    /// Local storage does not need Chromium Safe Storage cookie decryption.
     private static var browserCookieOrder: BrowserCookieImportOrder? {
         #if os(macOS)
-        [.chrome]
+        ChromiumLocalStorageDiscovery.defaultBrowsers
         #else
         nil
         #endif
@@ -54,12 +53,13 @@ public enum DevinProviderDescriptor {
             branding: ProviderBranding(
                 iconStyle: .init(provider: .devin),
                 iconResourceName: "ProviderIcon-devin",
-                color: ProviderColor(red: 70 / 255, green: 180 / 255, blue: 130 / 255),
+                color: ProviderColor(hex: 0x317CFF),
                 confettiPalette: [
+                    ProviderColor(hex: 0x317CFF),
                     ProviderColor(hex: 0x000000),
-                    ProviderColor(hex: 0x626870),
                     ProviderColor(hex: 0xFFFFFF),
-                ]),
+                ],
+                widgetColor: ProviderColor(hex: 0x46B482)),
             tokenCost: ProviderTokenCostConfig(
                 supportsTokenCost: false,
                 noDataMessage: { "Devin cost summary is not supported." }),

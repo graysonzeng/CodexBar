@@ -15,11 +15,9 @@ extension SpendDashboardModelTests {
                     Self.entry(day: "2026-07-15", cost: 2, model: "gpt-5.2-codex"),
                     Self.entry(day: "2026-07-16", cost: 3, model: nil),
                 ]))
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [codex],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.totalCost == 5)
         #expect(group.modelHistoryCompleteness == .incomplete)
@@ -45,11 +43,9 @@ extension SpendDashboardModelTests {
                             .init(modelName: "codex-auto-review", costUSD: nil, totalTokens: 60),
                         ]),
                 ]))
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [codex],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.totalCost == 2)
         #expect(group.modelHistoryCompleteness == .incomplete)
@@ -74,11 +70,9 @@ extension SpendDashboardModelTests {
                             .init(modelName: "codex-auto-review", costUSD: nil, totalTokens: 100),
                         ]),
                 ]))
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [codex],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.totalCost == 2)
         #expect(group.modelHistoryCompleteness == .incomplete)
@@ -103,11 +97,9 @@ extension SpendDashboardModelTests {
                             .init(modelName: "example-invalid-codex-model", costUSD: -1, totalTokens: 60),
                         ]),
                 ]))
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [codex],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.totalCost == 2)
         #expect(group.modelHistoryCompleteness == .incomplete)
@@ -122,11 +114,8 @@ extension SpendDashboardModelTests {
                 Self.entry(day: "2026-07-16", cost: nil, tokens: 12, model: nil),
                 Self.entry(day: "2026-07-15", cost: nil, tokens: 8, model: nil),
             ])
-        let group = try #require(SpendDashboardModel.build(
-            inputs: [.init(provider: .claude, displayName: "Claude", snapshot: snapshot)],
-            requestedDays: 30,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+        let group = try #require(Self.model(
+            inputs: [.init(provider: .claude, displayName: "Claude", snapshot: snapshot)]).groups.first)
 
         #expect(group.coveredDayCount == 30)
         #expect(group.totalCost == nil)
@@ -138,14 +127,11 @@ extension SpendDashboardModelTests {
 
     @Test
     func `full 30 day coverage keeps empty and known zero spend distinct from unavailable`() throws {
-        let unpriced = SpendDashboardModel.build(
+        let unpriced = Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: Self.snapshot(
                 currency: "USD",
-                entries: [Self.entry(day: "2026-07-16", cost: nil, tokens: 12, model: nil)]))],
-            requestedDays: 30,
-            now: Self.now,
-            calendar: Self.calendar)
-        let empty = SpendDashboardModel.build(
+                entries: [Self.entry(day: "2026-07-16", cost: nil, tokens: 12, model: nil)]))])
+        let empty = Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: CostUsageTokenSnapshot(
                 sessionTokens: nil,
                 sessionCostUSD: nil,
@@ -154,20 +140,14 @@ extension SpendDashboardModelTests {
                 currencyCode: "USD",
                 historyDays: 30,
                 daily: [],
-                updatedAt: Self.now))],
-            requestedDays: 30,
-            now: Self.now,
-            calendar: Self.calendar)
-        let knownZero = SpendDashboardModel.build(
+                updatedAt: Self.now))])
+        let knownZero = Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: Self.snapshot(
                 currency: "USD",
                 entries: [
                     Self.entry(day: "2026-07-16", cost: 0, tokens: 0, model: nil),
                     Self.entry(day: "2026-07-15", cost: 0, tokens: 0, model: nil),
-                ]))],
-            requestedDays: 30,
-            now: Self.now,
-            calendar: Self.calendar)
+                ]))])
 
         for model in [unpriced, empty, knownZero] {
             let group = try #require(model.groups.first)

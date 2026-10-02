@@ -20,7 +20,21 @@ CodexBar uses models.dev as an additive pricing source alongside bundled fallbac
 
 The pipeline lets future scanner code read the last valid cache synchronously with `ModelsDevPricingPipeline.lookup` and refresh stale metadata separately with `ModelsDevPricingPipeline.refreshIfNeeded`. If a refresh fails, the last valid cache remains usable.
 
-Catalog saves use a single atomic write on macOS and Linux, so refreshing an existing cache replaces its contents without removing the destination first. Successful saves invalidate the in-memory catalog memo.
+Changed catalogs use a single atomic write on macOS and Linux. After fallback pricing is merged, an identical
+catalog instead atomically updates `models-dev-v1.json.refresh`, preserving the catalog stamp and cached Claude
+reports. The sidecar stores the successful fetch time bound to the catalog's device/inode, size, and modification
+time. Both file stamps validate the bounded in-memory catalog memo; missing, corrupt, or mismatched sidecars
+fall back to the catalog's embedded fetch time. The 24-hour TTL and 15-minute unknown-model retry cooldown
+use the effective fetch time, including after relaunch. The version-1 catalog remains readable by older releases,
+which ignore the sidecar and use its embedded fetch time. Successful saves invalidate the decoded catalog memo.
+
+Refreshes preserve cached pricing for removed models using a provider-local stable-identity index. The index and model-ID normalization memo exist only during the merge; lookups likewise build their normalized-ID index only for the current provider and call. These indexes do not change cache lifetimes, provider boundaries, alias precedence, or dated snapshot pricing.
+
+Fresh OpenCodex dashboard loads and the opt-in CLI OpenCodex payload also refresh the catalog, even when
+no native Codex or Claude scan runs. Missing exact provider/model targets may trigger an earlier refresh,
+subject to the shared 15-minute retry cooldown. Cached dashboard publication and synchronous snapshot
+reads remain network-free. OpenCodex stores raw usage and recomputes estimates from the current catalog;
+updating a price does not require rereading unchanged usage logs.
 
 ## Lookup rules
 
@@ -33,7 +47,39 @@ Local cost scanners preserve that scope when selecting a catalog:
 - Other bare Claude-session IDs are priced only when exactly one selected first-party catalog matches. Ambiguous cross-vendor matches remain unpriced.
 - Provider-qualified Claude-session IDs stay on an approved explicit route and never fall through to another vendor.
 - Claude's [documented `k3[1m]` alias](https://www.kimi.com/code/docs/en/third-party-tools/claude-code.html) resolves to `kimi-for-coding/k3` after exact-row lookup, including the existing `kimi-coding/` and `kimi-for-coding/` routes. Recorded model names stay unchanged; other context variants and paid Moonshot routes are not inferred. Catalog zero rates remain known estimates, not a claim that subscriptions or extra usage are free.
+- OpenAI's [Daybreak aliases](https://developers.openai.com/api/docs/pricing) resolve like the unsuffixed `gpt-5.6` alias: `gpt-daybreak-blue-latest` prices as `gpt-5.6-sol` and `gpt-daybreak-red-latest` as `gpt-5.6-cyber`. Native usage rows retain raw model evidence; Codex aggregate model IDs follow the canonicalizer.
+- Antigravity's Gemini 3.1 Pro aliases (`gemini-pro-default`, `gemini-pro-agent`, and the `gemini-3.1-pro` effort tiers) price as `gemini-3.1-pro-preview`, the only catalogued Gemini 3.1 Pro row. The alias is provider-local; recorded model names stay unchanged.
+- Antigravity's safety-routed alias `gemini-3.7-flash-safety-le` prices as `gemini-3.7-flash`: the usage record's model enum ID matches ordinary `gemini-3.7-flash` turns. The alias is provider-local; the recorded model name stays unchanged.
 - Vertex AI Claude logs: models.dev provider id `google-vertex-anthropic`
+
+Dated Codex usage retains the prior bundled GPT-5.6 Sol rates before **2026-08-21 UTC**, the repricing date in the
+[OpenAI changelog](https://developers.openai.com/api/docs/changelog). Current and undated usage use the published
+current rates. Terra and Luna retain their separate July 30 cutoff. Custom-pricing overlays retain precedence.
+
+### Explicit provider identity in OpenCodex
+
+OpenCodex estimates use the recorded provider and model together. An unqualified model on `opencode-go`
+uses that provider's rates, not OpenAI's bundled prices. `provider=openrouter` with
+`model=openai/gpt-5.4` looks up the exact `openai/gpt-5.4` model inside the `openrouter` catalog.
+Only a redundant outer `openrouter/` prefix is removed. Router lookups do not fall back to bare model IDs,
+another provider, or OpenAI's bundled/historical tables.
+
+The shared target resolver preserves the existing Kimi/OpenCode provider aliases. Legacy OpenCodex rows
+with an `openai` transport label and an explicit supported subscription-route prefix retain that route.
+Other providers cannot borrow subscription attribution from a model namespace: an OpenRouter-hosted
+OpenAI model does not consume a Codex subscription.
+
+The CLI's separate OpenCodex payload can price any exact recorded provider/model present in the catalog.
+This does not enable new ingestion sources or add API providers to the dashboard's subscription fan-out.
+Existing Pi provider support and the opt-in OpenCodex setting are unchanged. Dollar amounts remain
+list-price estimates; recorded token usage is not a billing receipt. Rows lacking input/output counts,
+an exact price, or a consumed cache class's rate stay unpriced. An unpriced current day is not shown as $0.
+
+OpenCodex retains the recorded input, output, cache-read, and cache-creation counters. Non-OpenAI catalog
+prices and caller-supplied custom prices charge these independent classes without clamping cache usage
+to the input count. Historical OpenAI catalog pricing and all application-overlay calculations retain their
+inclusive input convention, including legacy routed rows. No convention is inferred from aggregate total tokens;
+missing cache prices remain unknown.
 
 ## Units
 
@@ -58,7 +104,12 @@ The Linux CLI uses `FileManager`’s Application Support directory (XDG data hom
 
 Values are USD per million tokens. For native Codex session scans, resolution order is **overlay > models.dev > builtin**. Changing the file invalidates the Codex pricing fingerprint so the next native Codex scan reloads rates.
 
-The overlay currently applies only to native Codex/OpenAI-compatible session pricing. Claude's local scanner, Cursor, and production OpenCodex snapshot loads do not read this file (OpenCodex keeps an empty overlay). A key such as `anthropic/claude-…` does not change Claude list prices.
+The overlay applies to native Codex/OpenAI-compatible pricing and OpenCodex estimates. OpenCodex checks
+the recorded provider/model identity before its provider catalog; its caller-supplied snapshot overlay
+takes precedence over the app-level overlay. Bare model keys remain global overrides with the documented
+bare-key precedence below. Use full keys such as `openrouter/openai/gpt-5.4` to scope routed prices.
+Claude's local scanner and Cursor do not read this file. A key such as `anthropic/claude-…` does not change
+Claude scanner list prices.
 
 Keys are case-insensitive and may be a bare model id (`gpt-5.4`) or `provider/model` (`openai/gpt-5.4`). Only an exact normalized key matches; there is no prefix or family glob. If both forms exist for the same model, the **bare key wins** and the provider-qualified row is ignored. Do not define both unless the bare override is the one you want.
 

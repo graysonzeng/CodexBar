@@ -38,7 +38,7 @@ struct CLIProxyAPIProviderImplementation: ProviderImplementation {
                     "CLIProxyAPI usage-statistics-enabled defaults to false; set it true or the queue stays empty.",
                     "Do not also run CPA-Manager as a consumer of the same queue.",
                 ].joined(separator: " "),
-                binding: context.boolBinding(\.cliproxyapiSpendTrackingEnabled),
+                binding: context.binding(\.cliproxyapiSpendTrackingEnabled),
                 statusText: nil,
                 actions: [],
                 isVisible: nil,
@@ -60,8 +60,7 @@ struct CLIProxyAPIProviderImplementation: ProviderImplementation {
                 placeholder: "management key…",
                 binding: context.providerConfigBinding(.apiKey),
                 actions: [],
-                isVisible: nil,
-                onActivate: nil),
+                isVisible: nil),
             ProviderSettingsFieldDescriptor(
                 id: "cliproxyapi-base-url",
                 title: "Base URL",
@@ -70,8 +69,7 @@ struct CLIProxyAPIProviderImplementation: ProviderImplementation {
                 placeholder: "http://127.0.0.1:8317",
                 binding: context.providerConfigBinding(.endpoint),
                 actions: [],
-                isVisible: nil,
-                onActivate: nil),
+                isVisible: nil),
             ProviderSettingsFieldDescriptor(
                 id: "cliproxyapi-auth-index",
                 title: "auth_index (optional)",
@@ -80,8 +78,7 @@ struct CLIProxyAPIProviderImplementation: ProviderImplementation {
                 placeholder: "auth_index…",
                 binding: context.providerConfigBinding(.workspace),
                 actions: [],
-                isVisible: nil,
-                onActivate: nil),
+                isVisible: nil),
         ]
     }
 }

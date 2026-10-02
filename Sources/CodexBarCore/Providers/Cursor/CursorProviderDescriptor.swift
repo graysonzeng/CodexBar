@@ -26,7 +26,8 @@ public enum CursorProviderDescriptor {
             id: .cursor,
             menuBarMetrics: ProviderMenuBarMetricCapabilities(
                 supported: [.automatic, .primary, .secondary, .tertiary, .extraUsage],
-                tertiaryRequiresWindow: true),
+                tertiaryRequiresWindow: true,
+                namedExtras: [CursorSandUsageStatus.extraWindowID: CursorSandUsageStatus.extraWindowTitle]),
             settingsSection: .init(CursorProviderSettingsKey.self, cookieSettings: CursorProviderSettings.self),
             credentials: self.credentials,
             metadata: ProviderMetadata(
@@ -61,11 +62,13 @@ public enum CursorProviderDescriptor {
             branding: ProviderBranding(
                 iconStyle: .init(provider: .cursor),
                 iconResourceName: "ProviderIcon-cursor",
-                color: ProviderColor(red: 0 / 255, green: 191 / 255, blue: 165 / 255),
+                color: ProviderColor(hex: 0xF54E00),
                 confettiPalette: [
+                    ProviderColor(hex: 0xF54E00),
                     ProviderColor(hex: 0x1B1913),
                     ProviderColor(hex: 0xEDECEC),
-                ]),
+                ],
+                widgetColor: ProviderColor(hex: 0x00BFA5)),
             tokenCost: ProviderTokenCostConfig(
                 supportsTokenCost: true,
                 noDataMessage: { "No Cursor cost usage found. Sign in to Cursor in your browser or the Cursor app." },
@@ -79,6 +82,7 @@ public enum CursorProviderDescriptor {
                 extraRateWindowSelector: { snapshot in
                     (snapshot.extraRateWindows ?? []).filter { $0.id == CursorSandUsageStatus.extraWindowID }
                 },
+                semanticWindowResolver: self.semanticWindows,
                 requestedMenuBarLaneOrders: [
                     .tertiary: [.tertiary, .secondary, .primary],
                 ],
@@ -116,6 +120,17 @@ public enum CursorProviderDescriptor {
         #else
         false
         #endif
+    }
+
+    /// Grok Bot is a named extra 7-day allowance. Cursor's monthly Auto bar is the secondary lane
+    /// (`weeklyLabel` "Cursor"), so it is the semantic weekly window. The default duration matcher
+    /// would pick Grok Bot instead and paint that weekly pace onto Cursor Auto after a billing reset.
+    private static func semanticWindows(snapshot: UsageSnapshot) -> ProviderSemanticWindows {
+        let weekly = snapshot.secondary.flatMap { window -> RateWindow? in
+            guard !window.isSyntheticPlaceholder else { return nil }
+            return window
+        }
+        return ProviderSemanticWindows(session: nil, weekly: weekly)
     }
 
     private static func menuBarWindow(

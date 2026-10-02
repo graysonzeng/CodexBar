@@ -47,7 +47,14 @@ actor CostUsageStore {
         }
 
         func sync<T>(_ operation: () throws -> T) rethrows -> T {
-            try self.queue.sync(execute: operation)
+            #if DEBUG
+            let hooks = CostUsageStoreTestHooks.current
+            return try self.queue.sync {
+                try CostUsageStoreTestHooks.$current.withValue(hooks, operation: operation)
+            }
+            #else
+            return try self.queue.sync(execute: operation)
+            #endif
         }
     }
 
@@ -80,6 +87,19 @@ actor CostUsageStore {
         parserHash: CodexParserHash.value)
     static let cacheGeneration = "sqlite:\(CostUsageStore.schemaVersion)"
     static let compatiblePredecessorParserHashes: Set<String> = [
+        "04a6361469a4ff77", // Settled orphan scheduling preserves rows, replay buffers, and checkpoints.
+        "98de5f52231e524e", // 0.68.0 rows and checkpoints survive sparse priority-day reconciliation.
+        "9972dad7f7aeff21", // Direct-fork baseline corrections use bounded parser-revision migration.
+        "4dd9e5769818370a", // Linux Priority trace support preserves native rows and checkpoints.
+        "03e43d1217789d16", // Fork baseline corrections use bounded native parser-revision migration.
+        "50813ce2a3edfdc7", // 0.63.0 native history is unchanged by Claude-only numeric guards.
+        "865a444e01b818f1", // 0.62.0 history survives bounded parser-revision migration.
+        "6a4df886696f4ab5", // Temporal reports preserve native rows and scan checkpoints.
+        "6d48baf0ed980828", // Source-backed row recovery preserves native history and scan checkpoints.
+        "c2ac37e84074d2b2", // Native rows are unchanged by Claude completion metadata.
+        "710f475c3d1cfb61", // 0.60.4 native rows and checkpoints are unchanged by Claude pricing corrections.
+        "aa57b010b3c0bee4", // Provider-aware pricing preserves native rows and scan checkpoints.
+        "aef0df6c73f8052c", // 0.60.1 rows and checkpoints survive routine rescan repairs.
         "4969a789db679c93", // 0.58.0 native rows, checkpoints, and reports survive queue reordering.
         "c4fa7db2cf54bc41", // Parser revisions reparse older native files while preserving stored rows and checkpoints.
         "ca4bc3875600536f", // Reserve pricing stores retain compatible rows and checkpoints.
@@ -120,20 +140,6 @@ actor CostUsageStore {
         "8050a4faf4fddb96",
     ]
 
-    /// Test-only crash injection: invoked inside `saveCodexCache`'s transaction after each
-    /// persisted file with the running count, so a crash-safety harness can SIGKILL the
-    /// process at a deterministic mid-save point. Never set in production.
-    nonisolated(unsafe) static var saveCycleCheckpointForTesting: ((Int) -> Void)?
-    /// Test-only interleaving point scoped to one database so parallel store fixtures stay isolated.
-    nonisolated(unsafe) static var identicalContentPreLockCheckpointForTesting: (
-        databaseURL: URL,
-        checkpoint: () -> Void)?
-
-    /// Test-only traversal proof for persisted Codex catch-up reconciliation. Never set in production.
-    nonisolated(unsafe) static var codexCatchUpReconciliationVisitForTesting: (() -> Void)?
-    /// Test-only read failures scoped by database and path. Never set in production.
-    nonisolated(unsafe) static var codexTokenSnapshotReadFailureForTesting: ((URL, String) -> Bool)?
-
     /// Process-wide serialization keeps every writable store connection on the same queue.
     /// This matches the scan pipeline's single-writer contract without multiplying executor
     /// threads when tests or short-lived readers create several store actors.
@@ -148,8 +154,11 @@ actor CostUsageStore {
     private let expectedParserHash: String
     private let busyTimeoutMilliseconds: Int32
     private var connection: SQLiteConnection?
+    var requiresReadReopen = false
     private var failureGeneration = UUID()
     var retainedCodexBaseline: RetainedCodexBaseline?
+    var retainedCodexRead: RetainedCodexRead?
+    var retainedCodexScan: CodexDecodedBaseline?
     #if DEBUG
     var codexBaselineReleaseObserverForTesting: (@Sendable () -> Void)?
     #endif
@@ -210,15 +219,18 @@ extension CostUsageStore {
         self.syncWithStoreIsolation { $0.releaseCodexBaseline(receipt) }
     }
 
-    nonisolated func syncLoadCodexCache(calendar: Calendar) -> CostUsageCache {
+    nonisolated func syncLoadCodexCache(
+        calendar: Calendar,
+        loadTokenSnapshots: Bool = true) -> CostUsageCache
+    {
         self.syncWithStoreIsolation { store in
-            store.loadCodexCache(calendar: calendar)
+            store.loadCodexCache(calendar: calendar, loadTokenSnapshots: loadTokenSnapshots)
         }
     }
 
     nonisolated func syncLoadCodexTokenSnapshotsIfAvailable(
         paths: Set<String>,
-        receipt: CodexBaselineReceipt) -> [String: [CostUsageStoreTokenSnapshot]]?
+        receipt: CodexBaselineReceipt) -> [String: [CostUsageCodexTokenSnapshot]]?
     {
         self.syncWithStoreIsolation { store in
             guard let stamp = store.codexBaselineStamp(for: receipt),
@@ -227,16 +239,20 @@ extension CostUsageStore {
             else { return nil }
             do {
                 // Reuse the loaded connection: reopening could rebuild a concurrent replacement.
-                let snapshots = try Self.inReadTransaction(database) {
+                let persisted = try Self.inReadTransaction(database) {
                     var snapshots: [String: [CostUsageStoreTokenSnapshot]] = [:]
                     for path in paths.sorted() {
-                        if Self.codexTokenSnapshotReadFailureForTesting?(store.databaseURL, path) == true {
+                        #if DEBUG
+                        if CostUsageStoreTestHooks.current
+                            .codexTokenSnapshotReadFailure?(store.databaseURL, path) == true
+                        {
                             throw StoreError.sqlite(SQLITE_IOERR)
                         }
+                        #endif
                         snapshots[path] = try Self.readTokenSnapshots(
                             database, path: path, recorder: store.scopedReadWorkRecorderForTesting)
                         #if DEBUG
-                        if let checkpoint = Self.codexTokenHydrationCheckpointForTesting,
+                        if let checkpoint = CostUsageStoreTestHooks.current.codexTokenHydrationCheckpoint,
                            checkpoint.databaseURL == store.databaseURL
                         {
                             try checkpoint.checkpoint()
@@ -245,8 +261,12 @@ extension CostUsageStore {
                     }
                     return snapshots
                 }
+                let snapshots = persisted.mapValues { $0.map(Self.tokenSnapshot) }
                 // A read transaction pins data_version; validate again only after COMMIT.
                 guard store.currentDatabaseStamp() == stamp else { return nil }
+                for (path, rows) in snapshots {
+                    store.retainedCodexBaseline?.baseline.hydratedTokenSnapshots[path] = rows
+                }
                 return snapshots
             } catch {
                 store.recoverConnectionAfterFailure()
@@ -407,6 +427,8 @@ extension CostUsageStore {
     /// next access reopens the intact file.
     func recoverConnectionAfterFailure() {
         self.retainedCodexBaseline = nil
+        self.retainedCodexRead = nil
+        self.retainedCodexScan = nil
         self.failureGeneration = UUID()
         guard let handle = self.connection?.handle else { return }
         if sqlite3_get_autocommit(handle) == 0,
@@ -485,6 +507,8 @@ extension CostUsageStore {
         defer {
             if sqlite3_total_changes64(database) != changes {
                 self.retainedCodexBaseline = nil
+                self.retainedCodexRead = nil
+                self.retainedCodexScan = nil
             } else if let retained = self.retainedCodexBaseline,
                       (try? Self.scalarInt(database, "PRAGMA schema_version")) != retained.baseline.stamp.schemaVersion
                       || (try? Self.scalarInt(database, "PRAGMA user_version")) != retained.baseline.stamp.userVersion
@@ -496,6 +520,8 @@ extension CostUsageStore {
             return try operation(database)
         } catch {
             self.retainedCodexBaseline = nil
+            self.retainedCodexRead = nil
+            self.retainedCodexScan = nil
             self.failureGeneration = UUID()
             throw error
         }
@@ -504,6 +530,8 @@ extension CostUsageStore {
     #if DEBUG
     func closeConnectionForTesting() {
         self.retainedCodexBaseline = nil
+        self.retainedCodexRead = nil
+        self.retainedCodexScan = nil
         self.connection?.close()
         self.connection = nil
     }
@@ -511,15 +539,18 @@ extension CostUsageStore {
 
     func ensureDatabase() throws -> OpaquePointer {
         if let database = self.connection?.handle {
-            if try self.connectionMatchesPath(database) {
+            if !self.requiresReadReopen, try self.connectionMatchesPath(database) {
                 return database
             }
             self.retainedCodexBaseline = nil
+            self.retainedCodexRead = nil
+            self.retainedCodexScan = nil
             // Never reopen underneath a transaction (including its COMMIT/ROLLBACK).
             guard sqlite3_get_autocommit(database) != 0 else { throw StoreError.sqlite(SQLITE_IOERR) }
             self.connection?.close()
             self.connection = nil
         }
+        self.requiresReadReopen = false
         do {
             let opened = try self.openDatabase()
             self.connection = SQLiteConnection(handle: opened, identity: Self.databaseIdentity(at: self.databaseURL))
@@ -669,6 +700,8 @@ extension CostUsageStore {
 
     private func rebuildDatabase(reason: String) {
         self.retainedCodexBaseline = nil
+        self.retainedCodexRead = nil
+        self.retainedCodexScan = nil
         self.connection?.close()
         self.connection = nil
         for suffix in ["", "-wal", "-shm"] {

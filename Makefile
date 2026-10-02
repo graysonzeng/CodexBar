@@ -1,6 +1,10 @@
 SHELL := /bin/bash
 
-.PHONY: build check docs-list format lint release restart start start-debug start-release stop test test-live test-tty
+# Keep FILTER literal, including Make expressions, shell syntax, and apostrophes.
+unexport FILTER
+test_filter_arg = $(if $(value FILTER),--filter '$(subst ','"'"',$(value FILTER))')
+
+.PHONY: build check docs-list format lint release restart start start-debug start-release stop test test-fast test-skip-build test-live test-tty
 
 start:
 	./Scripts/compile_and_run.sh
@@ -33,11 +37,17 @@ build:
 test:
 	./Scripts/test.sh
 
+test-fast:
+	./Scripts/test_fast.sh $(test_filter_arg)
+
+test-skip-build:
+	./Scripts/test_fast.sh --skip-build $(test_filter_arg)
+
 test-tty:
-	CODEXBAR_SUPPRESS_TEST_KEYCHAIN_ACCESS=1 swift test --filter TTYIntegrationTests
+	source ./Scripts/test_environment.sh && CODEXBAR_SUPPRESS_TEST_KEYCHAIN_ACCESS=1 swift test --filter TTYIntegrationTests
 
 test-live:
-	LIVE_TEST=1 CODEXBAR_ALLOW_TEST_KEYCHAIN_ACCESS=1 swift test --filter LiveAccountTests
+	export CODEXBAR_ALLOW_TEST_KEYCHAIN_ACCESS=1 && source ./Scripts/test_environment.sh && LIVE_TEST=1 swift test --filter LiveAccountTests
 
 release:
 	./Scripts/package_app.sh release

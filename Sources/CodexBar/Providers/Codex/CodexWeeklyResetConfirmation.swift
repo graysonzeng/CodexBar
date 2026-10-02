@@ -90,19 +90,10 @@ struct CodexWeeklyResetConfirmation: Sendable {
         initial: UsageSnapshot) -> InitialDecision
     {
         guard self.isFinite(initial.updatedAt) else { return .preservePrevious }
-        guard let previous else {
-            guard let initialWeekly = CodexConsumerProjection.sourceRateWindow(
-                for: .weekly,
-                snapshot: initial)
-            else {
-                return .publishInitial
+        if let previous {
+            guard self.isFinite(previous.updatedAt), initial.updatedAt > previous.updatedAt else {
+                return .preservePrevious
             }
-            return self.initialDecisionWithoutWeeklyBaseline(
-                initialWeekly: initialWeekly,
-                capturedAt: initial.updatedAt)
-        }
-        guard Self.isFinite(previous.updatedAt), initial.updatedAt > previous.updatedAt else {
-            return .preservePrevious
         }
 
         guard let previousWeekly = CodexConsumerProjection.sourceRateWindow(
@@ -115,9 +106,13 @@ struct CodexWeeklyResetConfirmation: Sendable {
             else {
                 return .publishInitial
             }
-            return self.initialDecisionWithoutWeeklyBaseline(
-                initialWeekly: initialWeekly,
-                capturedAt: initial.updatedAt)
+            guard initialWeekly.usedPercent.isFinite else { return .preservePrevious }
+            let boundary = Self.validResetBoundary(initialWeekly, capturedAt: initial.updatedAt)
+            if initialWeekly.resetsAt != nil, boundary == nil {
+                return .preservePrevious
+            }
+            guard initialWeekly.usedPercent <= Self.resetThreshold else { return .publishInitial }
+            return boundary == nil ? .preservePrevious : .requiresConfirmation
         }
         guard previousWeekly.usedPercent.isFinite else {
             return .preservePrevious
@@ -197,7 +192,8 @@ struct CodexWeeklyResetConfirmation: Sendable {
             return .publishConfirmation
         }
 
-        guard initialWeekly.usedPercent <= Self.resetThreshold,
+        guard Self.normalizedPlan(initial) == Self.normalizedPlan(confirmation),
+              initialWeekly.usedPercent <= Self.resetThreshold,
               let initialBoundary = Self.validResetBoundary(initialWeekly, capturedAt: initial.updatedAt),
               let confirmationBoundary = Self.validResetBoundary(
                   confirmationWeekly,
@@ -348,7 +344,17 @@ struct CodexWeeklyResetConfirmation: Sendable {
                   capturedAt: candidate.snapshot.updatedAt),
               let currentBoundary = Self.validResetBoundary(currentWeekly, capturedAt: current.updatedAt)
         else { return DelayedEvaluation(decision: .discardCandidate, reason: .invalidResetBoundary) }
-        guard abs(candidateBoundary.timeIntervalSince(currentBoundary)) < Self.resetEquivalenceToleranceSeconds else {
+        // Unused weekly windows roll forward with each observation, including across normal refresh intervals.
+        let unusedWeeklyWindows = zip(
+            [candidateWeekly, currentWeekly],
+            [candidate.snapshot.updatedAt, current.updatedAt]).allSatisfy { window, capturedAt in
+            guard window.usedPercent == 0, window.windowMinutes == 7 * 24 * 60,
+                  let boundary = window.resetsAt else { return false }
+            return abs(boundary.timeIntervalSince(capturedAt) - 604_800) < Self.resetEquivalenceToleranceSeconds
+        }
+        guard abs(candidateBoundary.timeIntervalSince(currentBoundary)) < Self.resetEquivalenceToleranceSeconds ||
+            (unusedWeeklyWindows && currentBoundary >= candidateBoundary)
+        else {
             return DelayedEvaluation(decision: .discardCandidate, reason: .inconsistentResetBoundary)
         }
         guard Self.isSupportedDelayedBoundary(previous: previousBoundary, current: candidateBoundary),
@@ -397,6 +403,11 @@ struct CodexWeeklyResetConfirmation: Sendable {
         let identities = snapshots.map { CodexIdentityResolver.normalizeEmail($0.accountEmail(for: .codex)) }
         guard let first = identities.compactMap(\.self).first else { return false }
         return identities.allSatisfy { $0 == first }
+    }
+
+    static func normalizedPlan(_ snapshot: UsageSnapshot?) -> String? {
+        let plan = snapshot?.loginMethod(for: .codex)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return plan?.isEmpty == false ? plan : nil
     }
 
     private static func haveCompatiblePlans(_ snapshots: UsageSnapshot...) -> Bool {
@@ -505,22 +516,6 @@ struct CodexWeeklyResetConfirmation: Sendable {
         // The live provider omits a consumed credit instead of retaining a redeemed row, so the
         // successful inventory's aggregate count must also corroborate the disappearance.
         return current.availableCount < previousAvailableCount
-    }
-
-    private static func initialDecisionWithoutWeeklyBaseline(
-        initialWeekly: RateWindow,
-        capturedAt: Date) -> InitialDecision
-    {
-        guard initialWeekly.usedPercent.isFinite else { return .preservePrevious }
-        if initialWeekly.resetsAt != nil,
-           self.validResetBoundary(initialWeekly, capturedAt: capturedAt) == nil
-        {
-            return .preservePrevious
-        }
-        guard initialWeekly.usedPercent <= self.resetThreshold else { return .publishInitial }
-        return self.validResetBoundary(initialWeekly, capturedAt: capturedAt) == nil
-            ? .preservePrevious
-            : .requiresConfirmation
     }
 
     private static func finiteResetBoundary(_ window: RateWindow) -> Date? {

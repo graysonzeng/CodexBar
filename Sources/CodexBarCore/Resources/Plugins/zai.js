@@ -49,7 +49,7 @@ defineProvider({
       throw new Error(`z.ai quota API error: ${root && root.msg ? root.msg : "invalid response"}`);
     }
     if (!root.data || typeof root.data !== "object" || !Array.isArray(root.data.limits)) {
-      throw new Error("Failed to parse z.ai quota data");
+      throw new Error("Unsupported z.ai quota format. Check Usage Dashboard for plan usage.");
     }
 
     function optionalInteger(value, field) {
@@ -58,6 +58,8 @@ defineProvider({
       return value;
     }
     function parseLimit(raw) {
+      if (raw && typeof raw.type === "string" && !["TOKENS_LIMIT", "TIME_LIMIT", "CREDIT_LIMIT"].includes(raw.type))
+        return null;
       if (
         !raw ||
         typeof raw !== "object" ||
@@ -67,9 +69,8 @@ defineProvider({
         !Number.isInteger(raw.number) ||
         !Number.isInteger(raw.percentage)
       ) {
-        throw new Error("Failed to parse z.ai limit entry");
+        throw new Error("Unsupported z.ai quota entry. Check Usage Dashboard for plan usage.");
       }
-      if (raw.type !== "TOKENS_LIMIT" && raw.type !== "TIME_LIMIT" && raw.type !== "CREDIT_LIMIT") return null;
       const usage = optionalInteger(raw.usage, "limit.usage");
       const current = optionalInteger(raw.currentValue, "limit.currentValue");
       const remaining = optionalInteger(raw.remaining, "limit.remaining");
@@ -170,29 +171,35 @@ defineProvider({
       .sort((a, b) => (a.windowMinutes || Number.MAX_SAFE_INTEGER) - (b.windowMinutes || Number.MAX_SAFE_INTEGER));
     const timeLimit = limits.filter((item) => item.raw.type === "TIME_LIMIT").pop() || null;
     const tokenLimit = tokenLimits.length ? tokenLimits[tokenLimits.length - 1] : null;
-    const sessionLimit = tokenLimits.length >= 2 ? tokenLimits[0] : null;
-    const primaryLimit = sessionLimit || tokenLimit || timeLimit;
+    const primaryLimit = tokenLimits[0] || timeLimit;
     const result = {
-      primary: primaryLimit ? window(primaryLimit) : { usedPercent: 0 },
+      primary: primaryLimit ? window(primaryLimit) : null,
       identity: {},
       details: [{ title: "Quota details", rows: [] }],
     };
-    if (sessionLimit && tokenLimit) result.secondary = window(tokenLimit);
-    if ((tokenLimit || sessionLimit) && timeLimit) {
+    if (!limits.length || limits.length < root.data.limits.length) {
+      result.details[0].rows.push({
+        label: tokenLimits.length ? "Additional quota" : "Coding Plan usage",
+        value: "Unavailable",
+        secondaryValue: "Check Usage Dashboard for complete plan usage.",
+      });
+    }
+    if (tokenLimits.length >= 2) result.secondary = window(tokenLimit);
+    if (tokenLimit && timeLimit) {
       result.extraWindows = [{ id: "zai-mcp", title: "MCP", window: window(timeLimit) }];
     }
     if (tokenLimit)
       result.details[0].rows.push(
         limitRow(tokenLimit.raw.type === "CREDIT_LIMIT" ? "Credit quota" : "Token quota", tokenLimit),
       );
-    if (sessionLimit)
+    if (tokenLimits.length >= 2)
       result.details[0].rows.push(
         limitRow(
-          sessionLimit.raw.type === "CREDIT_LIMIT" ? "Session credit quota" : "Session token quota",
-          sessionLimit,
+          primaryLimit.raw.type === "CREDIT_LIMIT" ? "Session credit quota" : "Session token quota",
+          primaryLimit,
         ),
       );
-    const hasCreditLimit = [tokenLimit, sessionLimit].some((item) => item && item.raw.type === "CREDIT_LIMIT");
+    const hasCreditLimit = [tokenLimit, primaryLimit].some((item) => item && item.raw.type === "CREDIT_LIMIT");
     if (hasCreditLimit) result.details[0].rows.push(quotaRateRow());
     if (timeLimit) {
       result.details[0].rows.push(limitRow("MCP quota", timeLimit));

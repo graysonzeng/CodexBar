@@ -233,6 +233,7 @@ public struct CLIProxyAPIManagementClient: Sendable {
         var normalized = baseURL
         let existing = normalized.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
         if !existing.hasSuffix("v0/management") {
+            // Provider-specific by design: v0 is the CLIProxyAPI management API version, not the v0 provider ID.
             normalized.appendPathComponent("v0", isDirectory: false)
             normalized.appendPathComponent("management", isDirectory: false)
         }

@@ -96,6 +96,109 @@ struct MenuBarLayoutRendererTests {
     }
 
     @Test
+    func `Cursor Grok Bot extra percentage renders independently`() {
+        let renderer = MenuBarLayoutRenderer()
+        let output = renderer.render(
+            layout: MenuBarLayout(lines: [[
+                .lanePercent(lane: .primary),
+                .lanePercent(lane: .secondary),
+                .lanePercent(lane: .tertiary),
+                .extraPercent(id: "cursor-grok-bot"),
+            ]]),
+            data: self.data(
+                provider: .cursor,
+                extraRateWindows: [MenuBarLayoutRenderExtra(NamedRateWindow(
+                    id: "cursor-grok-bot",
+                    title: "Grok Bot",
+                    window: RateWindow(usedPercent: 42, windowMinutes: nil, resetsAt: nil, resetDescription: nil)))]),
+            icon: nil,
+            options: self.options())
+
+        #expect(output.attributedTitle.string == "10%\u{2009}9%\u{2009}17%\u{2009}42%")
+        #expect(output.accessibilityLabel == "Total 10%, Cursor 9%, Third Party 17%, Grok Bot 42%")
+    }
+
+    @Test
+    func `missing Grok Bot extra percentage keeps sibling tokens visible`() {
+        let renderer = MenuBarLayoutRenderer()
+        let output = renderer.render(
+            layout: MenuBarLayout(lines: [[.lanePercent(lane: .primary), .extraPercent(id: "cursor-grok-bot")]]),
+            data: self.data(provider: .cursor),
+            icon: nil,
+            options: self.options())
+
+        #expect(output.attributedTitle.string == "10%")
+        #expect(output.accessibilityLabel == "Total 10%")
+    }
+
+    @Test
+    func `Grok Bot respects remaining mode provider ownership and cache refresh`() {
+        let renderer = MenuBarLayoutRenderer()
+        let layout = MenuBarLayout(lines: [[.lanePercent(lane: .primary)], [.extraPercent(id: "cursor-grok-bot")]])
+        for used in [42.0, 43.0] {
+            let extra = MenuBarLayoutRenderExtra(NamedRateWindow(
+                id: "cursor-grok-bot",
+                title: "Grok Bot",
+                window: RateWindow(usedPercent: used, windowMinutes: nil, resetsAt: nil, resetDescription: nil)))
+            let output = renderer.render(
+                layout: layout,
+                data: self.data(provider: .cursor, extraRateWindows: [extra]),
+                icon: nil,
+                options: self.options(showUsed: false))
+            #expect(output.attributedTitle.string == "90%\n\(Int(100 - used))%")
+            let other = renderer.render(
+                layout: layout,
+                data: self.data(provider: .codex, extraRateWindows: [extra]),
+                icon: nil,
+                options: self.options())
+            #expect(other.attributedTitle.string == "10%")
+        }
+        let missing = renderer.render(
+            layout: layout, data: self.data(provider: .cursor), icon: nil, options: self.options())
+        #expect(missing.attributedTitle.string == "10%")
+    }
+
+    @Test
+    func `synthetic Grok Bot before and after proof`() throws {
+        guard let directory = ProcessInfo.processInfo.environment["CODEXBAR_GROK_LAYOUT_SCREENSHOT_DIR"] else { return }
+        let extra = MenuBarLayoutRenderExtra(NamedRateWindow(
+            id: "cursor-grok-bot",
+            title: "Grok Bot",
+            window: RateWindow(usedPercent: 42, windowMinutes: nil, resetsAt: nil, resetDescription: nil)))
+        for includeExtra in [false, true] {
+            let name = includeExtra ? "after" : "before"
+            let tokens: [MenuBarLayoutToken] = [
+                .lanePercent(lane: .primary), .lanePercent(lane: .secondary), .lanePercent(lane: .tertiary),
+            ] + (includeExtra ? [.extraPercent(id: "cursor-grok-bot")] : [])
+            let rendered = MenuBarLayoutRenderer().render(
+                layout: MenuBarLayout(lines: [tokens]),
+                data: self.data(provider: .cursor, extraRateWindows: [extra]),
+                icon: nil,
+                options: self.options())
+            let image = NSImage(size: NSSize(width: 480, height: 110))
+            image.lockFocus()
+            NSColor.white.setFill()
+            NSRect(x: 0, y: 0, width: 480, height: 110).fill()
+            let caption = "\(name.capitalized): Cursor \(includeExtra ? "+ Grok Bot" : "standard lanes")"
+                + " · Synthetic data"
+            (caption as NSString).draw(at: NSPoint(x: 16, y: 80), withAttributes: [
+                .font: NSFont.systemFont(ofSize: 14), .foregroundColor: NSColor.black,
+            ])
+            let transform = NSAffineTransform()
+            transform.scale(by: 2)
+            transform.concat()
+            let text = NSMutableAttributedString(attributedString: rendered.attributedTitle)
+            text.addAttribute(.foregroundColor, value: NSColor.black, range: NSRange(location: 0, length: text.length))
+            text.draw(at: NSPoint(x: 8, y: 16))
+            image.unlockFocus()
+            let tiff = try #require(image.tiffRepresentation)
+            let bitmap = try #require(NSBitmapImageRep(data: tiff))
+            let png = try #require(bitmap.representation(using: .png, properties: [:]))
+            try png.write(to: URL(fileURLWithPath: directory).appendingPathComponent("grok-layout-\(name).png"))
+        }
+    }
+
+    @Test
     func `automatic balance text replaces the automatic percent window`() {
         let renderer = MenuBarLayoutRenderer()
         // DeepSeek's funded balance window arrives with usedPercent 0; the balance text must win
@@ -295,29 +398,7 @@ struct MenuBarLayoutRendererTests {
     @Test
     func `missing token data keeps every sibling visible as a placeholder`() {
         let renderer = MenuBarLayoutRenderer()
-        let missingData = MenuBarLayoutRenderData(
-            provider: .codex,
-            iconKey: "missing",
-            providerName: nil,
-            accountLabel: nil,
-            laneLabels: MenuBarLayoutLaneLabels(provider: .codex, snapshot: nil),
-            primary: nil,
-            secondary: nil,
-            tertiary: nil,
-            session: nil,
-            weekly: nil,
-            scopedWeekly: nil,
-            scopedWeeklyTitle: nil,
-            automatic: nil,
-            automaticText: nil,
-            sessionPace: nil,
-            weeklyPace: nil,
-            automaticPace: nil,
-            runsOut: nil,
-            balance: nil,
-            costToday: nil,
-            cost30d: nil,
-            metrics: .unavailable)
+        let missingData = Self.missingData
         let layout = MenuBarLayout(lines: [[
             .icon,
             .providerName,
@@ -453,6 +534,120 @@ struct MenuBarLayoutRendererTests {
         #expect(output.attributedTitle.string == "5h 25%\nW 60%")
         #expect(output.accessibilityLabel.contains(L("menu_bar_layout_line", 2)))
         #expect(bounds.height <= 22)
+    }
+
+    @Test
+    func `forceStackedStyle applies stacked typography to a single line render`() {
+        let renderer = MenuBarLayoutRenderer()
+        let icon = NSImage(size: NSSize(width: 16, height: 16))
+        icon.isTemplate = true
+        let stacked = renderer.render(
+            layout: MenuBarLayout(lines: [[.icon, .percent(window: .automatic)]]),
+            data: self.data(),
+            icon: icon,
+            options: self.options(forceStackedStyle: true))
+        let unstacked = renderer.render(
+            layout: MenuBarLayout(lines: [[.icon, .percent(window: .automatic)]]),
+            data: self.data(),
+            icon: icon,
+            options: self.options())
+
+        // Stacked rows render the icon inline in the title (so two rows can carry two different
+        // provider icons); the ordinary single-line path surfaces it as the separate leading icon.
+        #expect(stacked.leadingIcon == nil)
+        #expect(unstacked.leadingIcon != nil)
+        #expect(stacked.attributedTitle.string.hasSuffix("50%"))
+        #expect(stacked.attributedTitle.string != unstacked.attributedTitle.string)
+        #expect(stacked.statusImage == nil)
+    }
+
+    @Test
+    func `composeStackedProviderRows joins two independently rendered providers into one title`() {
+        let renderer = MenuBarLayoutRenderer()
+        let topOptions = self.options(forceStackedStyle: true)
+        let top = renderer.render(
+            layout: MenuBarLayout(lines: [[.percent(window: .automatic)]]),
+            data: self.data(automaticUsedPercent: 69, provider: .codex),
+            icon: nil,
+            options: topOptions)
+        let bottom = renderer.render(
+            layout: MenuBarLayout(lines: [[.percent(window: .automatic)]]),
+            data: self.data(automaticUsedPercent: 45, provider: .claude),
+            icon: nil,
+            options: topOptions)
+
+        let composed = MenuBarLayoutRenderer.composeStackedProviderRows(
+            top: top,
+            bottom: bottom,
+            topProviderName: "Codex",
+            bottomProviderName: "Claude")
+        let bounds = composed.attributedTitle.boundingRect(
+            with: NSSize(width: 200, height: CGFloat.greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading])
+
+        #expect(composed.attributedTitle.string == "69%\n45%")
+        #expect(composed.accessibilityLabel.contains(L("menu_bar_layout_line", 2)))
+        // Neither row's layout includes the icon or provider-name token, so the composed label is the
+        // only place a provider is ever named — VoiceOver would otherwise hear two anonymous percentages.
+        #expect(composed.accessibilityLabel.contains("Codex"))
+        #expect(composed.accessibilityLabel.contains("Claude"))
+        #expect(composed.leadingIcon == nil)
+        #expect(composed.statusImage == nil)
+        #expect(bounds.height <= 22)
+    }
+
+    @Test(arguments: ["aqua", "darkAqua"])
+    func `stacked bottom updates do not reuse the previous provider rendering`(appearance: String) {
+        let renderer = MenuBarLayoutRenderer()
+        let layout = MenuBarLayout(lines: [[.percent(window: .automatic)]])
+        let options = self.options(appearanceName: appearance, forceStackedStyle: true)
+        let top = renderer.render(layout: layout, data: self.data(provider: .codex), icon: nil, options: options)
+        let before = renderer.render(
+            layout: layout, data: self.data(automaticUsedPercent: 10, provider: .claude), icon: nil, options: options)
+        let after = renderer.render(
+            layout: layout, data: self.data(automaticUsedPercent: 90, provider: .claude), icon: nil, options: options)
+        let beforeTitle = MenuBarLayoutRenderer.composeStackedProviderRows(
+            top: top, bottom: before, topProviderName: "Codex", bottomProviderName: "Claude")
+        let afterTitle = MenuBarLayoutRenderer.composeStackedProviderRows(
+            top: top, bottom: after, topProviderName: "Codex", bottomProviderName: "Claude")
+        #expect(beforeTitle.attributedTitle.string == "50%\n10%")
+        #expect(afterTitle.attributedTitle.string == "50%\n90%")
+        #expect(beforeTitle.accessibilityLabel != afterTitle.accessibilityLabel)
+    }
+
+    @Test
+    func `composeStackedProviderRows drops the separator when one row is emptied by a hidden conditional`() {
+        let renderer = MenuBarLayoutRenderer()
+        // Session is 25%, so > 50 fails and the else branch (.hidden) wins, emptying the bottom row.
+        let conditional = MenuBarLayoutConditional(
+            clauses: [self.clause(metric: .session, comparison: .greaterThan, threshold: 50)],
+            thenToken: .percent(window: .session),
+            elseToken: .hidden)
+        let options = self.options(conditionals: [conditional], forceStackedStyle: true)
+
+        let top = renderer.render(
+            layout: MenuBarLayout(lines: [[.percent(window: .automatic)]]),
+            data: self.data(automaticUsedPercent: 69, provider: .codex),
+            icon: nil,
+            options: options)
+        let bottom = renderer.render(
+            layout: MenuBarLayout(lines: [[.conditional(id: conditional.id)]]),
+            data: self.data(provider: .claude),
+            icon: nil,
+            options: options)
+        #expect(bottom.attributedTitle.string.isEmpty)
+
+        let composed = MenuBarLayoutRenderer.composeStackedProviderRows(
+            top: top,
+            bottom: bottom,
+            topProviderName: "Codex",
+            bottomProviderName: "Claude")
+
+        // No stray blank row or vertical offset — the emptied row is dropped, not stacked as a blank line.
+        #expect(composed.attributedTitle.string == "69%")
+        #expect(!composed.attributedTitle.string.contains("\n"))
+        // The surviving row still gets its provider named, even though only one row made it through.
+        #expect(composed.accessibilityLabel == "Codex, \(top.accessibilityLabel)")
     }
 
     @Test
@@ -795,70 +990,31 @@ struct MenuBarLayoutRendererTests {
             .attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor == .controlTextColor)
     }
 
-    @Test
-    func `conditional renders then branch when predicate true`() {
+    @Test(arguments: [
+        (0.0, MenuBarLayoutToken.percent(window: .session), "5h 25%"),
+        (50.0, MenuBarLayoutToken.resetCountdown, "in 2h"),
+    ])
+    func `conditional renders the matching branch`(threshold: Double, token: MenuBarLayoutToken, expected: String) {
         let renderer = MenuBarLayoutRenderer()
+        // Session is 25%, so the two thresholds exercise both branches.
         let conditional = MenuBarLayoutConditional(
-            clauses: [self.clause(metric: .session, comparison: .greaterThan, threshold: 0)],
+            clauses: [self.clause(metric: .session, comparison: .greaterThan, threshold: threshold)],
             thenToken: .percent(window: .session),
             elseToken: .resetCountdown)
         let data = self.data()
-
         let output = renderer.render(
             layout: MenuBarLayout(lines: [[.conditional(id: conditional.id)]]),
             data: data,
             icon: nil,
             options: self.options(conditionals: [conditional]))
         let control = renderer.render(
-            layout: MenuBarLayout(lines: [[.percent(window: .session)]]),
+            layout: MenuBarLayout(lines: [[token]]),
             data: data,
             icon: nil,
             options: self.options())
 
         #expect(output.attributedTitle.string == control.attributedTitle.string)
-        #expect(output.attributedTitle.string == "5h 25%")
-    }
-
-    @Test
-    func `conditional renders else branch when predicate false`() {
-        let renderer = MenuBarLayoutRenderer()
-        // Session is 25%, so a > 50 threshold fails and the else branch must win.
-        let conditional = MenuBarLayoutConditional(
-            clauses: [self.clause(metric: .session, comparison: .greaterThan, threshold: 50)],
-            thenToken: .percent(window: .session),
-            elseToken: .resetCountdown)
-        let data = self.data()
-
-        let output = renderer.render(
-            layout: MenuBarLayout(lines: [[.conditional(id: conditional.id)]]),
-            data: data,
-            icon: nil,
-            options: self.options(conditionals: [conditional]))
-        let control = renderer.render(
-            layout: MenuBarLayout(lines: [[.resetCountdown]]),
-            data: data,
-            icon: nil,
-            options: self.options())
-
-        #expect(output.attributedTitle.string == control.attributedTitle.string)
-        #expect(output.attributedTitle.string == "in 2h")
-    }
-
-    @Test
-    func `hidden branch renders nothing`() {
-        let renderer = MenuBarLayoutRenderer()
-        // Session is 25%, so > 50 fails and the else branch (.hidden) wins, contributing nothing.
-        let conditional = MenuBarLayoutConditional(
-            clauses: [self.clause(metric: .session, comparison: .greaterThan, threshold: 50)],
-            thenToken: .percent(window: .session),
-            elseToken: .hidden)
-
-        let output = renderer.render(
-            layout: MenuBarLayout(lines: [[.conditional(id: conditional.id)]]),
-            data: self.data(),
-            icon: nil,
-            options: self.options(conditionals: [conditional]))
-        #expect(output.attributedTitle.string.isEmpty)
+        #expect(output.attributedTitle.string == expected)
     }
 
     @Test
@@ -944,29 +1100,7 @@ struct MenuBarLayoutRendererTests {
             clauses: [self.clause(metric: .session, comparison: .greaterThan, threshold: 0)],
             thenToken: .percent(window: .session),
             elseToken: .resetCountdown)
-        let data = MenuBarLayoutRenderData(
-            provider: .codex,
-            iconKey: "missing",
-            providerName: nil,
-            accountLabel: nil,
-            laneLabels: MenuBarLayoutLaneLabels(provider: .codex, snapshot: nil),
-            primary: nil,
-            secondary: nil,
-            tertiary: nil,
-            session: nil,
-            weekly: nil,
-            scopedWeekly: nil,
-            scopedWeeklyTitle: nil,
-            automatic: nil,
-            automaticText: nil,
-            sessionPace: nil,
-            weeklyPace: nil,
-            automaticPace: nil,
-            runsOut: nil,
-            balance: nil,
-            costToday: nil,
-            cost30d: nil,
-            metrics: .unavailable)
+        let data = Self.missingData
 
         let output = renderer.render(
             layout: MenuBarLayout(lines: [[.conditional(id: conditional.id)]]),
@@ -1616,6 +1750,32 @@ struct MenuBarLayoutRendererTests {
         }
     }
 
+    private static var missingData: MenuBarLayoutRenderData {
+        MenuBarLayoutRenderData(
+            provider: .codex,
+            iconKey: "missing",
+            providerName: nil,
+            accountLabel: nil,
+            laneLabels: MenuBarLayoutLaneLabels(provider: .codex, snapshot: nil),
+            primary: nil,
+            secondary: nil,
+            tertiary: nil,
+            session: nil,
+            weekly: nil,
+            scopedWeekly: nil,
+            scopedWeeklyTitle: nil,
+            automatic: nil,
+            automaticText: nil,
+            sessionPace: nil,
+            weeklyPace: nil,
+            automaticPace: nil,
+            runsOut: nil,
+            balance: nil,
+            costToday: nil,
+            cost30d: nil,
+            metrics: .unavailable)
+    }
+
     func data(
         automaticUsedPercent: Double = 50,
         provider: UsageProvider = .codex,
@@ -1624,6 +1784,7 @@ struct MenuBarLayoutRendererTests {
         automaticText: String? = nil,
         automaticBalanceFallback: String? = nil,
         accountLabel: String? = "user@example.com",
+        extraRateWindows: [MenuBarLayoutRenderExtra] = [],
         metrics: MenuBarLayoutRenderMetrics? = nil)
         -> MenuBarLayoutRenderData
     {
@@ -1648,6 +1809,7 @@ struct MenuBarLayoutRendererTests {
                 windowMinutes: 30 * 24 * 60,
                 resetsAt: nil,
                 resetDescription: nil)),
+            extraRateWindows: extraRateWindows,
             session: MenuBarLayoutRenderWindow(RateWindow(
                 usedPercent: 25,
                 windowMinutes: 300,
@@ -1692,25 +1854,28 @@ struct MenuBarLayoutRendererTests {
 
     func options(
         now: Date? = nil,
+        showUsed: Bool = true,
         verticalAdjustment: Int = 0,
         isStale: Bool = false,
         conditionals: [MenuBarLayoutConditional] = [],
         isDebugApp: Bool = false,
         colorPace: Bool = false,
         highContrast: Bool = false,
-        appearanceName: String = "aqua") -> MenuBarLayoutRenderOptions
+        appearanceName: String = "aqua",
+        forceStackedStyle: Bool = false) -> MenuBarLayoutRenderOptions
     {
         MenuBarLayoutRenderOptions(
             size: .regular,
             highContrast: highContrast,
-            showUsed: true,
+            showUsed: showUsed,
             conditionals: conditionals,
             appearanceName: appearanceName,
             isDebugApp: isDebugApp,
             isStale: isStale,
             now: now ?? self.now,
             verticalAdjustment: verticalAdjustment,
-            colorPace: colorPace)
+            colorPace: colorPace,
+            forceStackedStyle: forceStackedStyle)
     }
 
     private func averageBrightness(
@@ -1782,6 +1947,24 @@ private final class MenuBarLayoutSizeCountingImage: NSImage {
 }
 
 extension MenuBarLayoutRendererTests {
+    @Test
+    func `default status item preserves the 0_65_0 width contract`() {
+        let icon = NSImage(size: NSSize(width: 16, height: 16))
+        let renderer = MenuBarLayoutRenderer()
+        let output = renderer.render(
+            layout: .defaultLayout, data: self.data(), icon: icon, options: self.options())
+        #expect(output.attributedTitle.string == "\u{2009}50%")
+        // The renderer and sizing implementation are unchanged from v0.65.0.
+        #expect(output.statusItemWidth(gap: .tight) == 49)
+        #expect(output.statusItemWidth(gap: .regular) == 56)
+        let iconOnly = renderer.render(
+            layout: MenuBarLayout(lines: [[.icon]]), data: self.data(), icon: icon, options: self.options())
+        #expect(iconOnly.statusItemWidth(gap: .tight) == 19)
+        #expect(iconOnly.statusItemWidth(gap: .regular) == 26)
+        print("STATUS_WIDTH default regular=\(output.statusItemWidth(gap: .regular)) "
+            + "tight=\(output.statusItemWidth(gap: .tight)) iconOnly regular=26 tight=19")
+    }
+
     @Test
     func `plain single line status content reuses a template image by value`() throws {
         let cache = MenuBarLayoutTitleCache(capacity: 2)

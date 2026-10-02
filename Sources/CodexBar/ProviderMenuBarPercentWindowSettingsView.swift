@@ -11,17 +11,44 @@ struct ProviderMenuBarPercentWindowSettingsView: View {
     @Bindable var settings: SettingsStore
 
     var body: some View {
-        let layout = self.settings.menuBarLayoutResolution(for: self.provider).layout
-        let available = MenuBarPercentWindowPreference.available(for: self.provider)
-        if MenuBarPercentWindowPreference.isVisible(
+        ProviderMenuBarPercentWindowPicker(
+            provider: self.provider,
             iconStyle: self.settings.menuBarIconStyle,
+            layout: self.layoutBinding,
+            metric: self.metricBinding)
+    }
+
+    var layoutBinding: Binding<MenuBarLayout> {
+        Binding(
+            get: { self.settings.menuBarLayoutResolution(for: self.provider).layout },
+            set: { self.settings.setMenuBarLayout($0, for: self.provider) })
+    }
+
+    var metricBinding: Binding<MenuBarMetricPreference> {
+        Binding(
+            get: { self.settings.menuBarMetricPreference(for: self.provider) },
+            set: { self.settings.setMenuBarMetricPreference($0, for: self.provider) })
+    }
+}
+
+@MainActor
+struct ProviderMenuBarPercentWindowPicker: View {
+    let provider: UsageProvider
+    let iconStyle: MenuBarIconStyle
+    @Binding var layout: MenuBarLayout
+    var metric: Binding<MenuBarMetricPreference> = .constant(.automatic)
+
+    var body: some View {
+        let layout = self.layout
+        let available = MenuBarPercentWindowPreference.available(for: self.provider, layout: layout)
+        if MenuBarPercentWindowPreference.isVisible(
+            iconStyle: self.iconStyle,
             layout: layout,
             available: available)
         {
-            let current = MenuBarPercentWindowPreference.current(in: layout)
-            let selection = current.flatMap { available.contains($0) ? $0 : nil }
+            let selection = self.selectionBinding.wrappedValue
             Section {
-                Picker(L("menu_bar_metric_title"), selection: self.binding(layout: layout, current: selection)) {
+                Picker(L("menu_bar_metric_title"), selection: self.selectionBinding) {
                     if selection == nil {
                         // Mixed windows (e.g. Session · Weekly) are only describable in the layout
                         // editor; surface that instead of pretending one option is selected.
@@ -29,7 +56,7 @@ struct ProviderMenuBarPercentWindowSettingsView: View {
                             .tag(MenuBarPercentWindowPreference?.none)
                     }
                     ForEach(available) { preference in
-                        Text(preference.label).tag(MenuBarPercentWindowPreference?.some(preference))
+                        Text(preference.label(for: self.provider)).tag(MenuBarPercentWindowPreference?.some(preference))
                     }
                 }
                 .pickerStyle(.menu)
@@ -41,20 +68,28 @@ struct ProviderMenuBarPercentWindowSettingsView: View {
         }
     }
 
-    private func binding(
-        layout: MenuBarLayout,
-        current: MenuBarPercentWindowPreference?)
-        -> Binding<MenuBarPercentWindowPreference?>
-    {
+    var selectionBinding: Binding<MenuBarPercentWindowPreference?> {
         Binding(
-            get: { current },
+            get: {
+                let layout = self.layout
+                let available = MenuBarPercentWindowPreference.available(for: self.provider, layout: layout)
+                let metric = available.contains(.monthlyPlan) ? self.metric.wrappedValue : nil
+                return MenuBarPercentWindowPreference.current(in: layout, metric: metric)
+                    .flatMap { available.contains($0) ? $0 : nil }
+            },
             set: { preference in
-                guard let preference else { return }
-                MenuBarPercentWindowPreference.persist(
-                    preference,
-                    appliedTo: layout,
-                    for: self.provider,
-                    settings: self.settings)
+                let layout = self.layout
+                guard let preference,
+                      MenuBarPercentWindowPreference.available(for: self.provider, layout: layout).contains(preference)
+                else { return }
+                let updated = preference.applied(to: layout)
+                if MenuBarPercentWindowPreference.available(for: self.provider).contains(.monthlyPlan) {
+                    self.metric.wrappedValue = preference.menuBarMetric
+                    // Without a percentage to change, only the metric is stored, so the layout keeps following
+                    // its source instead of becoming a provider override.
+                    guard MenuBarPercentWindowPreference.hasPercentToken(in: layout) else { return }
+                }
+                self.layout = updated
             })
     }
 }

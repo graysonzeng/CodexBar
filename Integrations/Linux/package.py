@@ -26,13 +26,16 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     destination = args.output / f'{name}.tar.gz'
     files = {
-        'bin/codexbar-linux': args.binary,
+        'bin/codexbar-linux': args.binary.resolve(),
         'README.md': REPO / 'Integrations/Linux/README.md',
         'LICENSE': REPO / 'LICENSE',
     }
     for path in ['Integrations/Linux/install.py', 'Integrations/Linux/icon.svg',
                  'Integrations/Omarchy/Panel.qml', 'Integrations/Omarchy/manifest.json']:
         files[path] = REPO / path
+    # The adapter reads these beside itself; an archive without them falls back to text tags.
+    for icon in sorted((REPO / 'Sources/CodexBar/Resources').glob('ProviderIcon-*.svg')):
+        files[f'Integrations/Omarchy/icons/{icon.name}'] = icon
     # Explicit allowlist: never archive the checkout, user config, or local CLI resource tree.
     with tarfile.open(destination, 'w:gz') as archive:
         for relative, source in files.items():

@@ -6,20 +6,15 @@ import Testing
 extension SpendDashboardModelTests {
     @Test
     func `project rows aggregate windowed entries and rank by cost`() throws {
-        let model = SpendDashboardModel.build(
+        let model = Self.model(
             inputs: [
                 SpendDashboardModel.ProviderInput(
                     id: "codex-a",
                     provider: .codex,
                     displayName: "Codex",
-                    snapshot: CostUsageTokenSnapshot(
-                        sessionTokens: nil,
-                        sessionCostUSD: nil,
-                        last30DaysTokens: nil,
-                        last30DaysCostUSD: nil,
-                        currencyCode: "USD",
-                        historyDays: 30,
-                        daily: [
+                    snapshot: Self.snapshot(
+                        currency: "USD",
+                        entries: [
                             Self.entry(day: "2026-07-15", cost: 30),
                             Self.entry(day: "2026-07-16", cost: 10),
                         ],
@@ -31,12 +26,8 @@ extension SpendDashboardModelTests {
                             Self.project(name: "beta", days: [
                                 ("2026-07-16", 10),
                             ]),
-                        ],
-                        updatedAt: Self.now)),
-            ],
-            requestedDays: 30,
-            now: Self.now,
-            calendar: Self.calendar)
+                        ])),
+            ])
 
         let group = try #require(model.groups.first)
         #expect(group.projects.count == 2)
@@ -53,31 +44,23 @@ extension SpendDashboardModelTests {
 
     @Test
     func `project rows exclude days outside the requested window`() throws {
-        let model = SpendDashboardModel.build(
+        let model = Self.model(
             inputs: [
                 SpendDashboardModel.ProviderInput(
                     id: "codex-a",
                     provider: .codex,
                     displayName: "Codex",
-                    snapshot: CostUsageTokenSnapshot(
-                        sessionTokens: nil,
-                        sessionCostUSD: nil,
-                        last30DaysTokens: nil,
-                        last30DaysCostUSD: nil,
-                        currencyCode: "USD",
-                        historyDays: 30,
-                        daily: [Self.entry(day: "2026-07-15", cost: 3)],
+                    snapshot: Self.snapshot(
+                        currency: "USD",
+                        entries: [Self.entry(day: "2026-07-15", cost: 3)],
                         projects: [
                             Self.project(name: "alpha", days: [
                                 ("2026-07-01", 100),
                                 ("2026-07-15", 3),
                             ]),
-                        ],
-                        updatedAt: Self.now)),
+                        ])),
             ],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar)
+            requestedDays: 7)
 
         let group = try #require(model.groups.first)
         #expect(group.projects.count == 1)
@@ -87,7 +70,7 @@ extension SpendDashboardModelTests {
 
     @Test
     func `project rows stay attributed per source`() throws {
-        let model = SpendDashboardModel.build(
+        let model = Self.model(
             inputs: [
                 SpendDashboardModel.ProviderInput(
                     id: "codex-a",
@@ -105,10 +88,7 @@ extension SpendDashboardModelTests {
                         currency: "USD",
                         entries: [Self.entry(day: "2026-07-15", cost: 7)],
                         projects: [Self.project(name: "shared", days: [("2026-07-15", 7)])])),
-            ],
-            requestedDays: 30,
-            now: Self.now,
-            calendar: Self.calendar)
+            ])
 
         let group = try #require(model.groups.first)
         #expect(group.projects.count == 2)
@@ -119,28 +99,19 @@ extension SpendDashboardModelTests {
 
     @Test
     func `project rows drop projects without attributable window days`() throws {
-        let model = SpendDashboardModel.build(
+        let model = Self.model(
             inputs: [
                 SpendDashboardModel.ProviderInput(
                     id: "codex-a",
                     provider: .codex,
                     displayName: "Codex",
-                    snapshot: CostUsageTokenSnapshot(
-                        sessionTokens: nil,
-                        sessionCostUSD: nil,
-                        last30DaysTokens: nil,
-                        last30DaysCostUSD: nil,
-                        currencyCode: "USD",
-                        historyDays: 30,
-                        daily: [Self.entry(day: "2026-07-15", cost: 1)],
+                    snapshot: Self.snapshot(
+                        currency: "USD",
+                        entries: [Self.entry(day: "2026-07-15", cost: 1)],
                         projects: [
                             Self.project(name: "stale", days: [("2026-05-01", 50)]),
-                        ],
-                        updatedAt: Self.now)),
-            ],
-            requestedDays: 30,
-            now: Self.now,
-            calendar: Self.calendar)
+                        ])),
+            ])
 
         let group = try #require(model.groups.first)
         #expect(group.projects.isEmpty)
@@ -148,20 +119,15 @@ extension SpendDashboardModelTests {
 
     @Test
     func `project rows report unknown aggregates as nil but keep known ones`() throws {
-        let model = SpendDashboardModel.build(
+        let model = Self.model(
             inputs: [
                 SpendDashboardModel.ProviderInput(
                     id: "codex-a",
                     provider: .codex,
                     displayName: "Codex",
-                    snapshot: CostUsageTokenSnapshot(
-                        sessionTokens: nil,
-                        sessionCostUSD: nil,
-                        last30DaysTokens: nil,
-                        last30DaysCostUSD: nil,
-                        currencyCode: "USD",
-                        historyDays: 30,
-                        daily: [Self.entry(day: "2026-07-15", cost: 9)],
+                    snapshot: Self.snapshot(
+                        currency: "USD",
+                        entries: [Self.entry(day: "2026-07-15", cost: 9)],
                         projects: [
                             Self.project(name: "unknown-cost", days: [
                                 ("2026-07-15", 4),
@@ -171,12 +137,8 @@ extension SpendDashboardModelTests {
                                 name: "unknown-tokens",
                                 days: [("2026-07-15", 4)],
                                 tokens: nil),
-                        ],
-                        updatedAt: Self.now)),
-            ],
-            requestedDays: 30,
-            now: Self.now,
-            calendar: Self.calendar)
+                        ])),
+            ])
 
         let group = try #require(model.groups.first)
         #expect(group.projects.count == 2)

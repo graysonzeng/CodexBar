@@ -3,7 +3,7 @@ import Foundation
 extension AntigravityLocalReader {
     struct Context: Sendable {
         let home: URL
-        let environment: [String: String]
+        @ProcessEnvironment private(set) var environment: [String: String]
 
         init(environment: [String: String]) {
             self.environment = environment
@@ -55,10 +55,15 @@ extension AntigravityLocalReader {
         var sqliteHandlesClosed = 0
         /// Sidecar-less WAL databases that the ordinary read-only open declined and an immutable open read.
         var immutableFallbacks = 0
+        /// Databases in a declared root whose schema has no gen_metadata table; skipped without affecting coverage.
+        var foreignDatabases = 0
     }
 
     enum ScanFailure: Error {
         case exhausted
+        /// Schema-budget exhaustion (bytes, entries, or columns). Unlike hard row/byte/duration exhaustion,
+        /// schema exhaustion preserves already-decoded rows as partial history instead of withholding the report.
+        case schemaExhausted
         case invalid
     }
 
@@ -69,6 +74,9 @@ extension AntigravityLocalReader {
         let clock: () -> TimeInterval
         let started: TimeInterval
         var statistics = Statistics()
+        /// Schema text inspected in the current database. The schema allowance applies to each database,
+        /// like the entry and column limits, so a long history of small schemas never adds up to it.
+        private(set) var databaseSchemaBytes = 0
 
         init(
             limits: Limits,
@@ -99,11 +107,17 @@ extension AntigravityLocalReader {
             guard self.statistics.rows <= self.limits.rows else { throw ScanFailure.exhausted }
         }
 
+        func beginDatabase() {
+            self.databaseSchemaBytes = 0
+        }
+
         func chargeSchemaBytes(_ count: Int) throws {
             try self.check()
-            let (attempted, overflow) = self.statistics.schemaBytes.addingReportingOverflow(count)
-            self.statistics.schemaBytes = overflow ? Int.max : attempted
-            guard !overflow, attempted <= self.limits.schemaBytes else { throw ScanFailure.exhausted }
+            let (total, totalOverflow) = self.statistics.schemaBytes.addingReportingOverflow(count)
+            self.statistics.schemaBytes = totalOverflow ? Int.max : total
+            let (attempted, overflow) = self.databaseSchemaBytes.addingReportingOverflow(count)
+            self.databaseSchemaBytes = overflow ? Int.max : attempted
+            guard !overflow, attempted <= self.limits.schemaBytes else { throw ScanFailure.schemaExhausted }
         }
     }
 
@@ -150,8 +164,7 @@ extension AntigravityLocalReader {
                 }
                 guard !url.lastPathComponent.hasPrefix("."), url.pathExtension.lowercased() == suffix else { continue }
                 guard result.paths.count < budget.limits.databases else {
-                    result.isComplete = false
-                    return result
+                    throw ScanFailure.exhausted
                 }
                 do {
                     let values = try url.resolvingSymlinksInPath().resourceValues(forKeys: [.isRegularFileKey])

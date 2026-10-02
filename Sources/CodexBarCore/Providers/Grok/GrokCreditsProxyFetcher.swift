@@ -43,7 +43,7 @@ public enum GrokCreditsProxyFetcher {
         return try Self.parseSnapshot(response.data)
     }
 
-    static func parseSnapshot(_ data: Data) throws -> GrokWebBillingSnapshot {
+    static func parseSnapshot(_ data: Data, now: Date = .now) throws -> GrokWebBillingSnapshot {
         let response: CreditsResponse
         do {
             response = try JSONDecoder().decode(CreditsResponse.self, from: data)
@@ -56,15 +56,20 @@ public enum GrokCreditsProxyFetcher {
 
         let subscriptionTier = GrokPlan.displayName(
             from: config.subscriptionTier ?? response.subscriptionTier)
-        let resetsAt =
-            config.currentPeriod?.end.flatMap(Self.parseISO8601)
-            ?? config.billingPeriodEnd.flatMap(Self.parseISO8601)
+        let currentPeriodEnd = ISO8601DateParser.parse(config.currentPeriod?.end)
+        let resetsAt = currentPeriodEnd ?? ISO8601DateParser.parse(config.billingPeriodEnd)
+        // Match the start to the selected end; never combine different billing periods.
+        let periodStart = currentPeriodEnd == nil ? config.billingPeriodStart : config.currentPeriod?.start
+        let windowMinutes = Self.windowMinutes(start: periodStart, end: resetsAt, now: now)
 
         if let percent = config.creditUsagePercent, percent.isFinite {
             return GrokWebBillingSnapshot(
                 usedPercent: min(100, max(0, percent)),
                 resetsAt: resetsAt,
-                subscriptionTier: subscriptionTier)
+                windowMinutes: windowMinutes,
+                subscriptionTier: subscriptionTier,
+                productUsage: GrokProductUsage.composing(
+                    config.productUsage?.values ?? [], creditUsagePercent: percent))
         }
 
         if let cap = config.onDemandCap?.val,
@@ -75,6 +80,7 @@ public enum GrokCreditsProxyFetcher {
             return GrokWebBillingSnapshot(
                 usedPercent: percent,
                 resetsAt: resetsAt,
+                windowMinutes: windowMinutes,
                 subscriptionTier: subscriptionTier)
         }
 
@@ -82,20 +88,20 @@ public enum GrokCreditsProxyFetcher {
             return GrokWebBillingSnapshot(
                 usedPercent: nil,
                 resetsAt: resetsAt,
+                windowMinutes: windowMinutes,
                 subscriptionTier: subscriptionTier)
         }
 
         throw GrokWebBillingError.parseFailed
     }
 
-    private static func parseISO8601(_ raw: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: raw) {
-            return date
-        }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: raw)
+    private static func windowMinutes(start: String?, end: Date?, now: Date) -> Int? {
+        guard let start = ISO8601DateParser.parse(start),
+              let end, end > start, start <= now,
+              let minutes = Int(exactly: (end.timeIntervalSince(start) / 60).rounded(.down)),
+              minutes > 0
+        else { return nil }
+        return minutes
     }
 
     private struct CreditsResponse: Decodable {
@@ -106,13 +112,47 @@ public enum GrokCreditsProxyFetcher {
     private struct CreditsConfig: Decodable {
         let creditUsagePercent: Double?
         let currentPeriod: CurrentPeriod?
+        let billingPeriodStart: String?
         let billingPeriodEnd: String?
         let onDemandCap: CreditsAmount?
         let onDemandUsed: CreditsAmount?
         let subscriptionTier: String?
+        let productUsage: LossyProductUsageArray?
+    }
+
+    private struct LossyProductUsageArray: Decodable {
+        let values: [GrokProductUsage]?
+
+        init(from decoder: Decoder) {
+            self.values = (try? decoder.singleValueContainer().decode([LossyProductUsage].self))?
+                .map(\.value)
+        }
+    }
+
+    private struct LossyProductUsage: Decodable {
+        let value: GrokProductUsage
+
+        private enum CodingKeys: String, CodingKey {
+            case product
+            case usagePercent
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let product = try container.decode(String.self, forKey: .product)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let percent = try container.decode(Double.self, forKey: .usagePercent)
+            guard !product.isEmpty, percent.isFinite, percent >= 0 else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Invalid product usage"))
+            }
+            self.value = GrokProductUsage(product: product, usedPercent: percent)
+        }
     }
 
     private struct CurrentPeriod: Decodable {
+        let start: String?
         let end: String?
     }
 

@@ -53,7 +53,7 @@ struct CodexAccountScopedRefreshTests {
         #expect(store.lastCreditsSource == .none)
         #expect(store.openAIDashboard == nil)
         #expect(store.lastOpenAIDashboardSnapshot == nil)
-        #expect(store.tokenSnapshots[.codex] == tokenSnapshot)
+        #expect(store.tokenSnapshotPublications[.codex]?.snapshot == tokenSnapshot)
         #expect(widgetSnapshots.count == 1)
         #expect(widgetSnapshots[0].entries.contains(where: { $0.provider == .codex }) == false)
     }
@@ -278,7 +278,7 @@ struct CodexAccountScopedRefreshTests {
     }
 
     @Test
-    func `credits refresh returns quickly when no live codex account is available`() async {
+    func `credits refresh skips its loader when no live codex account is available`() async {
         let settings = self.makeSettingsStore(suite: "CodexAccountScopedRefreshTests-credits-no-live-account")
         let isolatedHome = CodexCredentialFixtures.root
             .appendingPathComponent("codex-credits-no-live-\(UUID().uuidString)", isDirectory: true)
@@ -299,12 +299,10 @@ struct CodexAccountScopedRefreshTests {
         }
         defer { store._test_codexCreditsLoaderOverride = nil }
 
-        let startedAt = ContinuousClock.now
         await store.refreshCreditsIfNeeded(minimumSnapshotUpdatedAt: Date())
-        let elapsed = startedAt.duration(to: .now)
 
         #expect(loaderCalled == false)
-        #expect(elapsed < .seconds(3))
+        #expect(store.credits == nil)
     }
 
     @Test

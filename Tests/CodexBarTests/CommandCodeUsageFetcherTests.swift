@@ -175,65 +175,73 @@ struct CommandCodeUsageFetcherTests {
 
     @Test
     func `subscription timeout does not hold credits for full request timeout`() async throws {
+        let subscriptionStarted = HeldRequestGate()
+        let subscriptionCancelled = HeldRequestGate()
         try await CommandCodeUsageFetcher.withIsolatedPlanCacheForTesting {
             let transport = ProviderHTTPTransportStub { request in
                 let path = try #require(request.url?.path)
                 if path.hasSuffix("/credits") {
+                    await subscriptionStarted.wait()
                     return try Self.response(request: request, statusCode: 200, body: Self.creditsJSON)
                 }
-                try await Task.sleep(for: .seconds(10))
+                await subscriptionStarted.open()
+                do {
+                    try await Task.sleep(for: .seconds(60))
+                } catch {
+                    await subscriptionCancelled.open()
+                    throw error
+                }
                 return try Self.response(request: request, statusCode: 200, body: Self.subscriptionJSON)
             }
 
-            let startedAt = ContinuousClock.now
             let snapshot = try await CommandCodeUsageFetcher.fetchUsage(
                 cookieHeader: "session=valid",
                 session: transport)
-            let elapsed = startedAt.duration(to: .now)
 
             #expect(snapshot.monthlyCreditsRemaining == 8.7784)
             #expect(snapshot.plan == nil)
             #expect(snapshot.subscriptionEnrichmentUnavailable)
-            #expect(elapsed < .seconds(3), "Subscription enrichment delayed credits: \(elapsed)")
+            await subscriptionCancelled.wait()
         }
     }
 
     @Test
     func `subscription grace does not wait for transport that ignores cancellation`() async throws {
+        let subscriptionStarted = HeldRequestGate()
+        let releaseSubscription = HeldRequestGate()
+        let subscriptionFinished = HeldRequestGate()
+        defer { Task { await releaseSubscription.open() } }
         try await CommandCodeUsageFetcher.withIsolatedPlanCacheForTesting {
             let transport = ProviderHTTPTransportStub { request in
                 let path = try #require(request.url?.path)
                 if path.hasSuffix("/credits") {
+                    await subscriptionStarted.wait()
                     return try Self.response(request: request, statusCode: 200, body: Self.creditsJSON)
                 }
                 let response = try Self.response(request: request, statusCode: 200, body: Self.subscriptionJSON)
-                return await withCheckedContinuation { continuation in
-                    DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
-                        continuation.resume(returning: response)
-                    }
-                }
+                await subscriptionStarted.open()
+                await releaseSubscription.wait()
+                await subscriptionFinished.open()
+                return response
             }
 
-            let startedAt = ContinuousClock.now
             let snapshot = try await CommandCodeUsageFetcher._fetchUsageForTesting(
                 cookieHeader: "session=valid",
                 transport: transport,
                 subscriptionGrace: .milliseconds(20))
-            let elapsed = startedAt.duration(to: .now)
 
             #expect(snapshot.monthlyCreditsRemaining == 8.7784)
             #expect(snapshot.plan == nil)
             #expect(snapshot.subscriptionEnrichmentUnavailable)
-            #expect(elapsed < .milliseconds(300), "Subscription enrichment delayed credits: \(elapsed)")
-
-            // Let the deliberately cancellation-ignoring test task drain before the test exits.
-            try await Task.sleep(for: .milliseconds(550))
+            #expect(await releaseSubscription.isOpen == false)
+            await releaseSubscription.open()
+            await subscriptionFinished.wait()
         }
     }
 
     @Test
     func `cancellation after credits complete does not return partial snapshot`() async throws {
-        let subscriptionStarted = CommandCodeRequestGate()
+        let subscriptionStarted = HeldRequestGate()
         let transport = ProviderHTTPTransportStub { request in
             let path = try #require(request.url?.path)
             if path.hasSuffix("/credits") {
@@ -260,23 +268,22 @@ struct CommandCodeUsageFetcherTests {
 
     @Test
     func `cancellation cleans up subscription when credits transport ignores cancellation`() async throws {
-        let creditsStarted = CommandCodeRequestGate()
-        let subscriptionStarted = CommandCodeRequestGate()
-        let subscriptionCancelled = CommandCodeRequestGate()
+        let releaseCredits = HeldRequestGate()
+        defer { Task { await releaseCredits.open() } }
+        let creditsStarted = HeldRequestGate()
+        let subscriptionStarted = HeldRequestGate()
+        let subscriptionCancelled = HeldRequestGate()
         let transport = ProviderHTTPTransportStub { request in
             let path = try #require(request.url?.path)
             if path.hasSuffix("/credits") {
                 await creditsStarted.open()
                 let response = try Self.response(request: request, statusCode: 200, body: Self.creditsJSON)
-                return await withCheckedContinuation { continuation in
-                    DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
-                        continuation.resume(returning: response)
-                    }
-                }
+                await releaseCredits.wait()
+                return response
             }
             await subscriptionStarted.open()
             do {
-                try await Task.sleep(for: .seconds(10))
+                try await Task.sleep(for: .seconds(60))
             } catch {
                 await subscriptionCancelled.open()
                 throw error
@@ -291,11 +298,11 @@ struct CommandCodeUsageFetcherTests {
 
         await creditsStarted.wait()
         await subscriptionStarted.wait()
-        let cancellationStartedAt = ContinuousClock.now
         task.cancel()
 
         await subscriptionCancelled.wait()
-        #expect(cancellationStartedAt.duration(to: .now) < .milliseconds(300))
+        #expect(await releaseCredits.isOpen == false)
+        await releaseCredits.open()
         await #expect(throws: CancellationError.self) {
             try await task.value
         }
@@ -303,7 +310,7 @@ struct CommandCodeUsageFetcherTests {
 
     @Test
     func `cancellation wins when optional transport ignores cancellation then fails`() async throws {
-        let subscriptionStarted = CommandCodeRequestGate()
+        let subscriptionStarted = HeldRequestGate()
         let transport = ProviderHTTPTransportStub { request in
             let path = try #require(request.url?.path)
             if path.hasSuffix("/credits") {
@@ -501,6 +508,92 @@ struct CommandCodeUsageFetcherTests {
     }
 
     @Test
+    func `parses granted monthly credits`() throws {
+        let data = Data("""
+        {"credits":{"monthlyCredits":4,"purchasedCredits":0,"premiumMonthlyCredits":0,
+        "opensourceMonthlyCredits":4,"monthlyCreditsGranted":10}}
+        """.utf8)
+        let payload = try CommandCodeUsageFetcher.parseCredits(data: data)
+        #expect(payload.monthlyCreditsGranted == 10)
+
+        let legacy = try CommandCodeUsageFetcher.parseCredits(data: #require(Self.creditsJSON.data(using: .utf8)))
+        #expect(legacy.monthlyCreditsGranted == nil)
+    }
+
+    @Test(arguments: [(4.0, 60.0), (0.0, 100.0)])
+    func `subscription failure in a fresh process sizes the monthly window from granted credits`(
+        remaining: Double,
+        usedPercent: Double) async throws
+    {
+        try await CommandCodeUsageFetcher.withIsolatedPlanCacheForTesting {
+            let transport = ProviderHTTPTransportStub { request in
+                let path = try #require(request.url?.path)
+                if path.hasSuffix("/credits") {
+                    let body = """
+                    {"credits":{"monthlyCredits":\(remaining),"purchasedCredits":0,"premiumMonthlyCredits":0,
+                    "opensourceMonthlyCredits":\(remaining),"monthlyCreditsGranted":10},
+                    "windowLimits":{"fiveHour":{"used":2.5,"cap":10,"resetAt":0},
+                    "weekly":{"used":30,"cap":100,"resetAt":0}}}
+                    """
+                    return try Self.response(request: request, statusCode: 200, body: body)
+                }
+                return try Self.response(request: request, statusCode: 503, body: #"{"error":"unavailable"}"#)
+            }
+
+            let snapshot = try await CommandCodeUsageFetcher._fetchUsageForTesting(
+                cookieHeader: "session=valid",
+                transport: transport,
+                subscriptionGrace: .seconds(5))
+
+            #expect(snapshot.subscriptionEnrichmentUnavailable)
+            #expect(snapshot.plan == nil)
+            let usage = snapshot.toUsageSnapshot()
+            let monthly = try #require(usage.tertiary)
+            #expect(abs(monthly.usedPercent - usedPercent) < 0.0001)
+            // The billing period end only comes from the subscription lookup.
+            #expect(monthly.resetsAt == nil)
+            #expect(usage.primary?.usedPercent == 25)
+            #expect(usage.secondary?.usedPercent == 30)
+        }
+    }
+
+    @Test
+    func `granted credits size the monthly window over the plan catalog`() throws {
+        let plan = try #require(CommandCodePlanCatalog.plan(forID: "individual-go"))
+        let snapshot = CommandCodeUsageSnapshot(
+            monthlyCreditsRemaining: 9,
+            purchasedCredits: 0,
+            premiumMonthlyCredits: 0,
+            opensourceMonthlyCredits: 9,
+            monthlyCreditsGranted: 12,
+            plan: plan,
+            billingPeriodEnd: nil,
+            subscriptionStatus: "active")
+
+        #expect(snapshot.monthlyCreditsTotal == 12)
+        let monthly = try #require(snapshot.toUsageSnapshot().tertiary)
+        #expect(abs(monthly.usedPercent - 25) < 0.0001)
+        #expect(snapshot.toUsageSnapshot().identity?.loginMethod == "Go · $3.00 of $12.00")
+    }
+
+    @Test(arguments: [0.0, -5.0, Double.infinity])
+    func `unusable granted credits keep the free tier reading`(granted: Double) throws {
+        let snapshot = CommandCodeUsageSnapshot(
+            monthlyCreditsRemaining: 0,
+            purchasedCredits: 5,
+            premiumMonthlyCredits: 0,
+            opensourceMonthlyCredits: 0,
+            monthlyCreditsGranted: granted,
+            plan: nil,
+            billingPeriodEnd: nil,
+            subscriptionStatus: nil)
+
+        #expect(snapshot.monthlyCreditsTotal == nil)
+        let monthly = try #require(snapshot.toUsageSnapshot().tertiary)
+        #expect(monthly.usedPercent == 0)
+    }
+
+    @Test
     func `endpoint override is limited to debug loopback origins`() throws {
         let key = "COMMANDCODE_API_URL"
         let production = try #require(URL(string: "https://api.commandcode.ai"))
@@ -533,26 +626,5 @@ struct CommandCodeUsageFetcherTests {
             httpVersion: nil,
             headerFields: nil))
         return (Data(body.utf8), response)
-    }
-}
-
-private actor CommandCodeRequestGate {
-    private var isOpen = false
-    private var continuations: [CheckedContinuation<Void, Never>] = []
-
-    func wait() async {
-        guard !self.isOpen else { return }
-        await withCheckedContinuation { continuation in
-            self.continuations.append(continuation)
-        }
-    }
-
-    func open() {
-        self.isOpen = true
-        let continuations = self.continuations
-        self.continuations.removeAll()
-        for continuation in continuations {
-            continuation.resume()
-        }
     }
 }

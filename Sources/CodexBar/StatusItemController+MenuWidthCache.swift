@@ -51,8 +51,12 @@ extension StatusItemController {
             managedCodexAccountCoordinator: self.managedCodexAccountCoordinator,
             codexAccountPromotionCoordinator: self.codexAccountPromotionCoordinator,
             updateReady: self.updater.updateStatus.isUpdateReady,
+            availableUpdateVersion: self.updater.updateStatus.availableVersion,
+            isInstallingUpdate: self.updater.updateStatus.isInstalling,
+            canCheckForUpdates: self.updater.isAvailable,
             includeContextualActions: includeContextualActions,
             codexWorkspacesMenuEnabled: codexWorkspacesMenuEnabled,
+            isKeepingAwake: self.agentSessions.isKeepingAwake,
             agentSessionsEnabled: self.settings.agentSessionsEnabled,
             agentSessionLabelStyle: self.settings.agentSessionLabelStyle,
             agentSessionsHideUnreachableHosts: self.settings.agentSessionsHideUnreachableHosts,
@@ -133,6 +137,8 @@ extension StatusItemController {
         switch action {
         case .installUpdate:
             "installUpdate"
+        case .checkForUpdates:
+            "checkForUpdates"
         case .refresh:
             "refresh"
         case .refreshAugmentSession:

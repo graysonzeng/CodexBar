@@ -3,13 +3,14 @@ import Foundation
 import Testing
 @testable import CodexBarCore
 
+/// Sol fixtures are dated after the 2026-08-21 repricing, so undated expected costs use the same rates.
 struct CostUsageScannerForkSplitTests {
     @Test
-    func `codex report preserves short request pricing after copied fork prefix`() async throws {
+    func `source verified short fork requests preserve pricing and persistence`() async throws {
         let environment = try CostUsageTestEnvironment()
         defer { environment.cleanup() }
 
-        let day = try environment.makeLocalNoon(year: 2026, month: 8, day: 11)
+        let day = try environment.makeLocalNoon(year: 2026, month: 9, day: 11)
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         let dayKey = range.sinceKey
         let model = "gpt-5.6-sol"
@@ -42,7 +43,7 @@ struct CostUsageScannerForkSplitTests {
             canonicalProjectPath: projectPath,
             codexRows: [parentRow],
             codexScanComplete: true)
-        let childUsage = CostUsageScanner.makeFileUsage(
+        var childUsage = CostUsageScanner.makeFileUsage(
             mtimeUnixMs: childRow.timestampUnixMs ?? 0,
             size: 1,
             days: [dayKey: [model: [200_000, 0, 100]]],
@@ -60,6 +61,13 @@ struct CostUsageScannerForkSplitTests {
         cache.scanUntilKey = dayKey
         cache.timeZoneIdentifier = range.calendar.timeZone.identifier
 
+        let contaminatedChild = CostUsageScanner.codexCanonicalPricingRows(childUsage)
+        #expect(contaminatedChild.rows.isEmpty)
+        #expect(contaminatedChild.unresolvedGroups == [.init(day: dayKey, model: model)])
+        #expect(CostUsageScanner.buildCodexReportFromCache(cache: cache, range: range).summary?.totalCostUSD == nil)
+        // The source parser must establish child ownership before request-level pricing is trusted.
+        childUsage.codexRows = [childRow]
+        cache.files["/child.jsonl"] = childUsage
         let report = CostUsageScanner.buildCodexReportFromCache(cache: cache, range: range)
         let requestCost = try #require(CostUsagePricing.codexCostUSD(
             model: model,
@@ -98,17 +106,17 @@ struct CostUsageScannerForkSplitTests {
         let restored = currentStore.syncLoadCodexCache(calendar: range.calendar)
         let warmReport = CostUsageScanner.buildCodexReportFromCache(cache: restored, range: range)
         #expect(await currentStore.rebuildCount == 0)
-        #expect(restored.files.values.flatMap { $0.codexRows ?? [] }.count == 3)
+        #expect(restored.files.values.flatMap { $0.codexRows ?? [] }.count == 2)
         #expect(warmReport.data == report.data)
         #expect(warmReport.summary == report.summary)
     }
 
     @Test
-    func `codex report applies long context pricing only to the genuine long request`() throws {
+    func `source verified fork requests apply long context pricing only to the long request`() throws {
         let environment = try CostUsageTestEnvironment()
         defer { environment.cleanup() }
 
-        let day = try environment.makeLocalNoon(year: 2026, month: 8, day: 11)
+        let day = try environment.makeLocalNoon(year: 2026, month: 9, day: 11)
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         let dayKey = range.sinceKey
         let model = "gpt-5.6-sol"
@@ -157,7 +165,7 @@ struct CostUsageScannerForkSplitTests {
             sessionId: "long-session",
             codexRows: [longRow],
             codexScanComplete: true)
-        let childUsage = CostUsageScanner.makeFileUsage(
+        var childUsage = CostUsageScanner.makeFileUsage(
             mtimeUnixMs: timestamp + 2,
             size: 1,
             days: [dayKey: [model: [100_000, 0, 100]]],
@@ -170,6 +178,12 @@ struct CostUsageScannerForkSplitTests {
         cache.files = ["/long.jsonl": parentUsage, "/short.jsonl": childUsage]
         cache.days = [dayKey: [model: [400_000, 0, 200]]]
 
+        let contaminatedChild = CostUsageScanner.codexCanonicalPricingRows(childUsage)
+        #expect(contaminatedChild.rows.isEmpty)
+        #expect(contaminatedChild.unresolvedGroups == [.init(day: dayKey, model: model)])
+        #expect(CostUsageScanner.buildCodexReportFromCache(cache: cache, range: range).summary?.totalCostUSD == nil)
+        childUsage.codexRows = [shortRow, trailingZeroRow]
+        cache.files["/short.jsonl"] = childUsage
         let reconciledChild = CostUsageScanner.codexCanonicalPricingRows(childUsage)
         #expect(reconciledChild.unresolvedGroups.isEmpty)
         #expect(reconciledChild.rows == [shortRow, trailingZeroRow])
@@ -200,7 +214,7 @@ struct CostUsageScannerForkSplitTests {
         let environment = try CostUsageTestEnvironment()
         defer { environment.cleanup() }
 
-        let day = try environment.makeLocalNoon(year: 2026, month: 8, day: 11)
+        let day = try environment.makeLocalNoon(year: 2026, month: 9, day: 11)
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         let dayKey = range.sinceKey
         let model = "gpt-5.6-sol"
@@ -258,7 +272,7 @@ struct CostUsageScannerForkSplitTests {
         let environment = try CostUsageTestEnvironment()
         defer { environment.cleanup() }
 
-        let day = try environment.makeLocalNoon(year: 2026, month: 8, day: 11)
+        let day = try environment.makeLocalNoon(year: 2026, month: 9, day: 11)
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         let dayKey = range.sinceKey
         let model = "gpt-5.4-mini"
@@ -308,7 +322,7 @@ struct CostUsageScannerForkSplitTests {
 
     @Test
     func `exact codex pricing rows retain persisted order`() {
-        let dayKey = "2026-08-11"
+        let dayKey = "2026-09-11"
         let model = "gpt-5.6-sol"
         let later = CostUsageScanner.CodexUsageRow(
             day: dayKey,
@@ -342,19 +356,20 @@ struct CostUsageScannerForkSplitTests {
     }
 
     @Test
-    func `copied fast prefix with later timestamp cannot replace persisted standard suffix`() throws {
+    func `source verified standard child retains pricing despite a later fast parent timestamp`() throws {
         let environment = try CostUsageTestEnvironment()
         defer { environment.cleanup() }
-        let day = try environment.makeLocalNoon(year: 2026, month: 8, day: 11)
+        let day = try environment.makeLocalNoon(year: 2026, month: 9, day: 11)
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         let dayKey = range.sinceKey
         let model = "gpt-5.6-sol"
+        let timestamp = Int64(day.timeIntervalSince1970 * 1000)
         let parent = CostUsageScanner.CodexUsageRow(
             day: dayKey,
             model: model,
             turnID: "fast-parent",
             eventIndex: 0,
-            timestampUnixMs: 2,
+            timestampUnixMs: timestamp + 2,
             input: 100_000,
             cached: 0,
             output: 10,
@@ -364,7 +379,7 @@ struct CostUsageScannerForkSplitTests {
             model: model,
             turnID: "standard-child",
             eventIndex: 1,
-            timestampUnixMs: 1,
+            timestampUnixMs: timestamp + 1,
             input: 100_000,
             cached: 0,
             output: 10,
@@ -377,7 +392,7 @@ struct CostUsageScannerForkSplitTests {
             sessionId: "parent",
             codexRows: [parent],
             codexScanComplete: true)
-        let childUsage = CostUsageScanner.makeFileUsage(
+        var childUsage = CostUsageScanner.makeFileUsage(
             mtimeUnixMs: 2,
             size: 1,
             days: [dayKey: [model: [100_000, 0, 10]]],
@@ -386,6 +401,10 @@ struct CostUsageScannerForkSplitTests {
             forkedFromId: "parent",
             codexRows: [parent, child],
             codexScanComplete: true)
+        let contaminatedChild = CostUsageScanner.codexCanonicalPricingRows(childUsage)
+        #expect(contaminatedChild.rows.isEmpty)
+        #expect(contaminatedChild.unresolvedGroups == [.init(day: dayKey, model: model)])
+        childUsage.codexRows = [child]
         let reconciled = CostUsageScanner.codexCanonicalPricingRows(childUsage)
         #expect(reconciled.unresolvedGroups.isEmpty)
         #expect(reconciled.rows == [child])
@@ -415,16 +434,17 @@ struct CostUsageScannerForkSplitTests {
     func `zero owned fork rows use an empty suffix without hiding parent cost`() throws {
         let environment = try CostUsageTestEnvironment()
         defer { environment.cleanup() }
-        let day = try environment.makeLocalNoon(year: 2026, month: 8, day: 11)
+        let day = try environment.makeLocalNoon(year: 2026, month: 9, day: 11)
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         let dayKey = range.sinceKey
         let model = "gpt-5.6-sol"
+        let timestamp = Int64(day.timeIntervalSince1970 * 1000)
         let parentRow = CostUsageScanner.CodexUsageRow(
             day: dayKey,
             model: model,
             turnID: "parent",
             eventIndex: 0,
-            timestampUnixMs: 1,
+            timestampUnixMs: timestamp + 1,
             input: 300_000,
             cached: 0,
             output: 10)
@@ -465,7 +485,7 @@ struct CostUsageScannerForkSplitTests {
     func `exact rows require complete request pricing coverage`() throws {
         let environment = try CostUsageTestEnvironment()
         defer { environment.cleanup() }
-        let day = try environment.makeLocalNoon(year: 2026, month: 8, day: 11)
+        let day = try environment.makeLocalNoon(year: 2026, month: 9, day: 11)
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         let dayKey = range.sinceKey
         let model = "gpt-5.6-sol"
@@ -533,7 +553,7 @@ struct CostUsageScannerForkSplitTests {
     func `project primary report propagates unresolved same model ownership`() throws {
         let environment = try CostUsageTestEnvironment()
         defer { environment.cleanup() }
-        let day = try environment.makeLocalNoon(year: 2026, month: 8, day: 11)
+        let day = try environment.makeLocalNoon(year: 2026, month: 9, day: 11)
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         let dayKey = range.sinceKey
         let model = "gpt-5.6-sol"
@@ -596,7 +616,7 @@ struct CostUsageScannerForkSplitTests {
     func `project primary report keeps priced models beside explicitly unpriced models`() throws {
         let environment = try CostUsageTestEnvironment()
         defer { environment.cleanup() }
-        let day = try environment.makeLocalNoon(year: 2026, month: 8, day: 11)
+        let day = try environment.makeLocalNoon(year: 2026, month: 9, day: 11)
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         let dayKey = range.sinceKey
         let pricedModel = "gpt-5.6-sol"
@@ -645,10 +665,11 @@ struct CostUsageScannerForkSplitTests {
     }
 
     @Test
-    func `codex report reconciles copied fork prefix without losing fast split`() throws {
+    func `source refresh removes copied fork prefix without losing fast split`() throws {
         let fixture = try self.makeFixture()
         defer { fixture.environment.cleanup() }
 
+        let originalReport = CostUsageScanner.buildCodexReportFromCache(cache: fixture.cache, range: fixture.range)
         var cache = fixture.cache
         let parent = try #require(cache.files.first { $0.value.sessionId == "parent-session" })
         let child = try #require(cache.files.first { $0.value.sessionId == "child-session" })
@@ -665,7 +686,24 @@ struct CostUsageScannerForkSplitTests {
             .reduce(0) { $0 + $1.input + $1.output }
         #expect(rowTokens > canonicalTokens)
 
-        let report = CostUsageScanner.buildCodexReportFromCache(cache: cache, range: fixture.range)
+        let contaminatedReport = CostUsageScanner.buildCodexReportFromCache(cache: cache, range: fixture.range)
+        #expect(contaminatedReport.summary?.totalTokens == canonicalTokens)
+        #expect(contaminatedReport.summary?.totalCostUSD == nil)
+        #expect(!CostUsageStoreAccess.replace(cacheRoot: fixture.environment.cacheRoot, cache: cache).catchUpRequired)
+        var options = fixture.options
+        options.forceRescan = false
+        options.refreshMinIntervalSeconds = 3600
+        let report = CostUsageScanner.loadDailyReport(
+            provider: .codex,
+            since: fixture.day,
+            until: fixture.day,
+            now: fixture.day.addingTimeInterval(1),
+            options: options)
+        #expect(report.data == originalReport.data)
+        #expect(report.summary == originalReport.summary)
+        let recovered = CostUsageStoreAccess.read(cacheRoot: fixture.environment.cacheRoot)
+        #expect(recovered.files[child.key]?.codexRows == child.value.codexRows)
+        #expect(recovered.files[parent.key]?.codexRows == parent.value.codexRows)
         let breakdown = try #require(report.data.first?.modelBreakdowns?.first)
         let standardCost = try #require(CostUsagePricing.codexCostUSD(
             model: fixture.model,
@@ -715,13 +753,17 @@ struct CostUsageScannerForkSplitTests {
         #expect(breakdown.standardTokens == 55)
         #expect(breakdown.priorityTokens == 110)
     }
+}
 
+extension CostUsageScannerForkSplitTests {
     private struct Fixture {
         let environment: CostUsageTestEnvironment
+        let day: Date
         let range: CostUsageScanner.CostUsageDayRange
         let dayKey: String
         let model: String
         let cache: CostUsageCache
+        let options: CostUsageScanner.Options
     }
 
     private func makeFixture() throws -> Fixture {
@@ -796,10 +838,12 @@ struct CostUsageScannerForkSplitTests {
         let range = CostUsageScanner.CostUsageDayRange(since: day, until: day)
         return Fixture(
             environment: env,
+            day: day,
             range: range,
             dayKey: range.sinceKey,
             model: model,
-            cache: CostUsageStoreAccess.read(cacheRoot: env.cacheRoot, calendar: range.calendar))
+            cache: CostUsageStoreAccess.read(cacheRoot: env.cacheRoot, calendar: range.calendar),
+            options: options)
     }
 
     private func totalTokenCount(timestamp: String, input: Int, cached: Int, output: Int) -> [String: Any] {

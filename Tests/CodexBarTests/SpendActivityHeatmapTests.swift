@@ -13,11 +13,19 @@ struct SpendActivityHeatmapTests {
     }
 
     @Test
-    func `weekly and cumulative totals saturate instead of overflowing`() {
+    func `weekly and cumulative totals saturate instead of overflowing`() throws {
+        let calendar = Self.calendar
+        let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 8, day: 2)))
+        let now = try #require(calendar.date(byAdding: .day, value: 7, to: start))
         let daily = [Int.max, 1, 0, 0, 0, 0, 0, 2]
-        let weekly = SpendActivityLevels.weeklyTotals(daily)
-        #expect(weekly == [Int.max, 2])
-        #expect(SpendActivityLevels.cumulativeTotals(weekly) == [Int.max, Int.max])
+        let points = try daily.enumerated().map { offset, tokens in
+            let day = try #require(calendar.date(byAdding: .day, value: offset, to: start))
+            return SpendDashboardModel.TokenActivityPoint(day: day, totalTokens: tokens)
+        }
+        let series = SpendActivitySeries.make(from: points, now: now, calendar: calendar)
+        let weekly = series.weeklyActivity()
+        #expect(Array(weekly.values.suffix(2)) == [Int.max, 2])
+        #expect(Array(weekly.cumulative().values.suffix(2)) == [Int.max, Int.max])
     }
 
     @Test
@@ -207,6 +215,41 @@ struct SpendActivityHeatmapTests {
         let point = model.tokenActivity.first { $0.day == now }
         #expect(point?.totalTokens == nil)
         #expect(point?.isScanned == true)
+    }
+
+    @Test
+    func `OpenCode Go token history keeps shared activity days covered`() throws {
+        let now = try #require(Self.calendar.date(from: DateComponents(year: 2026, month: 7, day: 16, hour: 12)))
+        let today = Self.calendar.startOfDay(for: now)
+        let yesterday = try #require(Self.calendar.date(byAdding: .day, value: -1, to: today))
+        let openCodeGo = OpenCodeGoUsageSnapshot(
+            hasMonthlyUsage: true,
+            rollingUsagePercent: 0,
+            weeklyUsagePercent: 0,
+            monthlyUsagePercent: 0,
+            rollingResetInSec: 0,
+            weeklyResetInSec: 0,
+            monthlyResetInSec: 0,
+            daily: [Self.entry(day: "2026-07-16", cost: 2, tokens: 60)],
+            updatedAt: now).toCostUsageTokenSnapshot(historyDays: 30)
+        let claude = Self.snapshot(
+            entries: [
+                Self.entry(day: "2026-07-15", cost: 1, tokens: 15),
+                Self.entry(day: "2026-07-16", cost: 1, tokens: 40),
+            ],
+            historyDays: 30,
+            last30DaysTokens: 55)
+        let model = SpendDashboardModel.build(
+            inputs: [
+                .init(id: "claude", provider: .claude, displayName: "Claude", snapshot: claude),
+                .init(id: "opencodego", provider: .opencodego, displayName: "OpenCode Go", snapshot: openCodeGo),
+            ],
+            requestedDays: 30,
+            now: now,
+            calendar: Self.calendar)
+
+        #expect(model.tokenActivity.first { $0.day == today }?.totalTokens == 100)
+        #expect(model.tokenActivity.first { $0.day == yesterday }?.totalTokens == 15)
     }
 
     @Test

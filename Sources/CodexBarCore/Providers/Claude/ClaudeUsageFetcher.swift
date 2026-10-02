@@ -18,9 +18,12 @@ public struct ClaudeUsageSnapshot: Sendable {
     public let opus: RateWindow?
     public let extraRateWindows: [NamedRateWindow]
     public let providerCost: ProviderCostSnapshot?
+    public let resetCredits: ClaudeRateLimitResetCreditsSnapshot?
     public let updatedAt: Date
     public let accountEmail: String?
     public let accountOrganization: String?
+    /// Verified principal and organization from the same credential that produced this usage.
+    public let accountID: String?
     public let loginMethod: String?
     public let rawText: String?
     /// Present only when the credential used for this OAuth fetch matches the current Claude Keychain item.
@@ -43,6 +46,7 @@ public struct ClaudeUsageSnapshot: Sendable {
         opus: RateWindow?,
         extraRateWindows: [NamedRateWindow] = [],
         providerCost: ProviderCostSnapshot? = nil,
+        resetCredits: ClaudeRateLimitResetCreditsSnapshot? = nil,
         updatedAt: Date,
         accountEmail: String?,
         accountOrganization: String?,
@@ -53,7 +57,8 @@ public struct ClaudeUsageSnapshot: Sendable {
         oauthCredentialOwner: ClaudeOAuthCredentialOwner? = nil,
         oauthKeychainCredentialMismatch: Bool = false,
         oauthKeychainCredentialAbsent: Bool = false,
-        oauthKeychainCredentialUnavailable: Bool = false)
+        oauthKeychainCredentialUnavailable: Bool = false,
+        accountID: String? = nil)
     {
         self.primary = primary
         self.primaryWindowKind = primaryWindowKind
@@ -61,9 +66,11 @@ public struct ClaudeUsageSnapshot: Sendable {
         self.opus = opus
         self.extraRateWindows = extraRateWindows
         self.providerCost = providerCost
+        self.resetCredits = resetCredits
         self.updatedAt = updatedAt
         self.accountEmail = accountEmail
         self.accountOrganization = accountOrganization
+        self.accountID = accountID
         self.loginMethod = loginMethod
         self.rawText = rawText
         self.oauthKeychainPersistentRefHash = oauthKeychainPersistentRefHash
@@ -109,7 +116,7 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
     private static let cliProbeTimeout: TimeInterval = 24
     private static let cliRetryProbeTimeout: TimeInterval = 60
     private struct Configuration {
-        let environment: [String: String]
+        @ProcessEnvironment var environment: [String: String]
         let runtime: ProviderRuntime
         let dataSource: ClaudeUsageDataSource
         let oauthKeychainPromptCooldownEnabled: Bool
@@ -121,6 +128,7 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
         let webOrganizationID: String?
         let webExtrasTimeout: TimeInterval
         let includePrepaidBalance: Bool
+        let includeAccountIdentity: Bool
         let keepCLISessionsAlive: Bool
         let browserDetection: BrowserDetection
     }
@@ -131,40 +139,16 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
         ProcessInfo.processInfo.environment["CODEXBAR_DEBUG_CLAUDE_OAUTH_FLOW"] == "1"
     }
 
-    private var environment: [String: String] {
-        self.configuration.environment
-    }
-
-    private var runtime: ProviderRuntime {
-        self.configuration.runtime
-    }
-
-    private var dataSource: ClaudeUsageDataSource {
-        self.configuration.dataSource
-    }
-
-    private var oauthKeychainPromptCooldownEnabled: Bool {
-        self.configuration.oauthKeychainPromptCooldownEnabled
-    }
-
     private var oauthSafeCredentialSourcesOnly: Bool {
-        self.dataSource == .auto || self.configuration.oauthSafeCredentialSourcesOnly
-    }
-
-    private var preserveInvalidOAuthCache: Bool {
-        self.configuration.preserveInvalidOAuthCache
+        self.configuration.dataSource == .auto || self.configuration.oauthSafeCredentialSourcesOnly
     }
 
     private var allowsDelegatedOAuthRefresh: Bool {
-        self.runtime == .app
+        self.configuration.runtime == .app
     }
 
     private var allowBackgroundDelegatedRefresh: Bool {
         self.configuration.allowBackgroundDelegatedRefresh
-    }
-
-    private var useWebExtras: Bool {
-        self.configuration.useWebExtras
     }
 
     private var manualCookieHeader: String? {
@@ -295,6 +279,7 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
         webOrganizationID: String? = nil,
         webExtrasTimeout: TimeInterval = 15,
         includePrepaidBalance: Bool = false,
+        includeAccountIdentity: Bool = false,
         keepCLISessionsAlive: Bool = false)
     {
         self.configuration = Configuration(
@@ -310,29 +295,33 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
             webOrganizationID: webOrganizationID,
             webExtrasTimeout: webExtrasTimeout,
             includePrepaidBalance: includePrepaidBalance,
+            includeAccountIdentity: includeAccountIdentity,
             keepCLISessionsAlive: keepCLISessionsAlive,
             browserDetection: browserDetection)
     }
 
     private struct OAuthExecutor {
         let fetcher: ClaudeUsageFetcher
+        private static let scopeRecoveryMessage =
+            "Use a Claude Code sign-in token that includes 'user:profile'. "
+                + "To use Web/CLI instead, remove any configured OAuth token override and switch Claude Source."
 
         func load(allowDelegatedRetry: Bool) async throws -> ClaudeUsageSnapshot {
             do {
                 let promptPolicy = ClaudeUsageFetcher.currentClaudeOAuthInteractivePromptPolicy()
                 let credentialRecord = try await ClaudeUsageFetcher.loadOAuthCredentialRecord(
-                    environment: self.fetcher.environment,
+                    environment: self.fetcher.configuration.environment,
                     allowKeychainPrompt: false,
                     respectKeychainPromptCooldown: promptPolicy.shouldRespectKeychainPromptCooldown,
                     safeCredentialSourcesOnly: self.fetcher.oauthSafeCredentialSourcesOnly,
-                    clearInvalidCache: !self.fetcher.preserveInvalidOAuthCache)
+                    clearInvalidCache: !self.fetcher.configuration.preserveInvalidOAuthCache)
                 let credentials = credentialRecord.credentials
 
                 try self.validateRequiredOAuthScope(credentials)
                 let usage = try await ClaudeUsageFetcher.fetchOAuthUsage(
                     accessToken: credentials.accessToken,
-                    detectClaudeVersion: self.fetcher.runtime == .app,
-                    environment: self.fetcher.environment)
+                    detectClaudeVersion: self.fetcher.configuration.runtime == .app,
+                    environment: self.fetcher.configuration.environment)
                 // History is scoped by the credential's one-way owner identifier. Do not compare the winning
                 // credential with Claude Code's foreign Keychain item after a successful request.
                 let keychainMatch: ClaudeKeychainCredentialMatch = credentialRecord.owner == .claudeCLI
@@ -347,8 +336,10 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                     oauthKeychainCredentialMismatch: keychainMatch.isMismatch,
                     oauthKeychainCredentialAbsent: keychainMatch.isAbsent,
                     oauthKeychainCredentialUnavailable: keychainMatch.isUnavailable)
+                let identified = try await self.fetcher.appendingAccountIdentity(
+                    to: snapshot, accessToken: credentials.accessToken)
                 return try await self.fetcher.applyWebExtrasIfNeeded(
-                    to: snapshot,
+                    to: identified,
                     oauthAccessToken: credentials.accessToken)
             } catch let error as CancellationError {
                 throw error
@@ -373,8 +364,8 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                 // Explicit OAuth is an authority boundary. Retain a credential that reached the
                 // service but failed so a later retry cannot reinterpret it as absence and fall
                 // through to the ambient CLI. Auto retains its existing invalidation behavior.
-                if !self.fetcher.preserveInvalidOAuthCache {
-                    ClaudeOAuthCredentialsStore.invalidateCache(environment: self.fetcher.environment)
+                if !self.fetcher.configuration.preserveInvalidOAuthCache {
+                    ClaudeOAuthCredentialsStore.invalidateCache(environment: self.fetcher.configuration.environment)
                 }
                 if case let .serverError(statusCode, body) = error,
                    statusCode == 403,
@@ -382,10 +373,13 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                 {
                     throw ClaudeUsageError.oauthFailed(
                         "Claude OAuth token does not meet scope requirement 'user:profile'. "
-                            + "Run `claude setup-token` to re-generate credentials, or switch Claude Source to "
-                            + "Web/CLI.")
+                            + Self.scopeRecoveryMessage)
                 }
-                throw ClaudeUsageError.oauthFailed(error.localizedDescription)
+                let failure = ClaudeUsageError.oauthFailed(error.localizedDescription)
+                if case let .networkError(underlyingError) = error {
+                    throw ProviderTransportError.preservingIdentity(of: underlyingError, describedBy: failure)
+                }
+                throw failure
             } catch {
                 throw ClaudeUsageError.oauthFailed(error.localizedDescription)
             }
@@ -406,7 +400,7 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                 allowBackgroundDelegatedRefresh: self.fetcher.allowBackgroundDelegatedRefresh)
 
             let delegatedResult = await ClaudeUsageFetcher.attemptDelegatedRefresh(
-                environment: self.fetcher.environment)
+                environment: self.fetcher.configuration.environment)
             let delegatedOutcome = delegatedResult.outcome
             ClaudeUsageFetcher.log.info(
                 "Claude OAuth delegated refresh attempted",
@@ -416,7 +410,7 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                 ])
 
             do {
-                if self.fetcher.oauthKeychainPromptCooldownEnabled {
+                if self.fetcher.configuration.oauthKeychainPromptCooldownEnabled {
                     switch delegatedOutcome {
                     case .skippedByCooldown, .skippedByPromptPolicy, .cliUnavailable:
                         throw ClaudeUsageError.oauthFailed(
@@ -430,12 +424,12 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                 try Task.checkCancellation()
 
                 _ = ClaudeOAuthCredentialsStore.invalidateCacheIfCredentialsFileChanged(
-                    environment: self.fetcher.environment)
+                    environment: self.fetcher.configuration.environment)
 
                 let didSyncSilently = delegatedOutcome == .attemptedSucceeded
                     && ClaudeOAuthCredentialsStore.syncFromClaudeKeychainWithoutPrompt(
                         now: Date(),
-                        environment: self.fetcher.environment)
+                        environment: self.fetcher.configuration.environment)
 
                 let promptPolicy = ClaudeUsageFetcher.currentClaudeOAuthInteractivePromptPolicy()
                 ClaudeUsageFetcher.logDeferredBackgroundDelegatedRecoveryIfNeeded(
@@ -447,7 +441,7 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                     ClaudeUsageFetcher.log.debug(
                         "Claude OAuth credential load (post-delegation retry start)",
                         metadata: [
-                            "cooldownEnabled": "\(self.fetcher.oauthKeychainPromptCooldownEnabled)",
+                            "cooldownEnabled": "\(self.fetcher.configuration.oauthKeychainPromptCooldownEnabled)",
                             "didSyncSilently": "\(didSyncSilently)",
                             "allowKeychainPrompt": "\(retryAllowKeychainPrompt)",
                             "delegatedOutcome": ClaudeUsageFetcher.delegatedRefreshOutcomeLabel(delegatedOutcome),
@@ -459,18 +453,18 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
 
                 let refreshedRecord = try await ProviderRefreshRequestContext.withNewRequest {
                     try await ClaudeUsageFetcher.loadOAuthCredentialRecord(
-                        environment: self.fetcher.environment,
+                        environment: self.fetcher.configuration.environment,
                         allowKeychainPrompt: retryAllowKeychainPrompt,
                         respectKeychainPromptCooldown: promptPolicy.shouldRespectKeychainPromptCooldown,
                         safeCredentialSourcesOnly: self.fetcher.oauthSafeCredentialSourcesOnly,
-                        clearInvalidCache: !self.fetcher.preserveInvalidOAuthCache)
+                        clearInvalidCache: !self.fetcher.configuration.preserveInvalidOAuthCache)
                 }
                 let refreshedCredentials = refreshedRecord.credentials
                 if ClaudeUsageFetcher.isClaudeOAuthFlowDebugEnabled {
                     ClaudeUsageFetcher.log.debug(
                         "Claude OAuth credential load (post-delegation retry)",
                         metadata: [
-                            "cooldownEnabled": "\(self.fetcher.oauthKeychainPromptCooldownEnabled)",
+                            "cooldownEnabled": "\(self.fetcher.configuration.oauthKeychainPromptCooldownEnabled)",
                             "didSyncSilently": "\(didSyncSilently)",
                             "allowKeychainPrompt": "\(retryAllowKeychainPrompt)",
                             "delegatedOutcome": ClaudeUsageFetcher.delegatedRefreshOutcomeLabel(delegatedOutcome),
@@ -483,8 +477,8 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                 try self.validateRequiredOAuthScope(refreshedCredentials)
                 let usage = try await ClaudeUsageFetcher.fetchOAuthUsage(
                     accessToken: refreshedCredentials.accessToken,
-                    detectClaudeVersion: self.fetcher.runtime == .app,
-                    environment: self.fetcher.environment)
+                    detectClaudeVersion: self.fetcher.configuration.runtime == .app,
+                    environment: self.fetcher.configuration.environment)
                 let keychainMatch: ClaudeKeychainCredentialMatch = refreshedRecord.owner == .claudeCLI
                     ? .unavailable
                     : .notApplicable
@@ -497,8 +491,10 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                     oauthKeychainCredentialMismatch: keychainMatch.isMismatch,
                     oauthKeychainCredentialAbsent: keychainMatch.isAbsent,
                     oauthKeychainCredentialUnavailable: keychainMatch.isUnavailable)
+                let identified = try await self.fetcher.appendingAccountIdentity(
+                    to: snapshot, accessToken: refreshedCredentials.accessToken)
                 return try await self.fetcher.applyWebExtrasIfNeeded(
-                    to: snapshot,
+                    to: identified,
                     oauthAccessToken: refreshedCredentials.accessToken)
             } catch let error where ClaudeOAuthFetchError.isCancellation(error) {
                 throw error
@@ -515,7 +511,8 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                     "Claude OAuth post-delegation retry failed",
                     metadata: ClaudeUsageFetcher.delegatedRetryFailureMetadata(
                         error: error,
-                        oauthKeychainPromptCooldownEnabled: self.fetcher.oauthKeychainPromptCooldownEnabled,
+                        oauthKeychainPromptCooldownEnabled: self.fetcher.configuration
+                            .oauthKeychainPromptCooldownEnabled,
                         delegatedOutcome: delegatedOutcome))
                 throw ClaudeUsageFetcher.delegatedRefreshFailureError(
                     for: delegatedResult,
@@ -530,8 +527,7 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                     ? "Claude OAuth token missing 'user:profile' scope."
                     : "Claude OAuth token missing 'user:profile' scope (has: \(scopes))."
                 throw ClaudeUsageError.oauthFailed(
-                    detail + " Run `claude setup-token` to re-generate credentials, or switch Claude Source to "
-                        + "Web/CLI.")
+                    detail + " " + Self.scopeRecoveryMessage)
             }
         }
 
@@ -555,7 +551,7 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
         let fetcher: ClaudeUsageFetcher
 
         func loadLatestUsage(model: String) async throws -> ClaudeUsageSnapshot {
-            switch self.fetcher.dataSource {
+            switch self.fetcher.configuration.dataSource {
             case .auto:
                 return try await self.executeAuto(model: model)
             case .api:
@@ -566,7 +562,7 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
             case .web:
                 return try await self.fetcher.loadViaWebAPI()
             case .cli:
-                return try await self.loadViaCLIWithRetry(model: model)
+                return try await self.loadViaCLIWithRetry(model: model, timeout: ClaudeUsageFetcher.cliProbeTimeout)
             }
         }
 
@@ -605,15 +601,15 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                 } else {
                     ClaudeWebAPIFetcher.hasSessionKey(browserDetection: self.fetcher.browserDetection)
                 }
-            let hasCLI = ClaudeCLIResolver.isAvailable(environment: self.fetcher.environment)
+            let hasCLI = ClaudeCLIResolver.isAvailable(environment: self.fetcher.configuration.environment)
             return ClaudeSourcePlanner.resolve(input: ClaudeSourcePlanningInput(
-                runtime: self.fetcher.runtime,
+                runtime: self.fetcher.configuration.runtime,
                 selectedDataSource: .auto,
-                webExtrasEnabled: self.fetcher.useWebExtras,
+                webExtrasEnabled: self.fetcher.configuration.useWebExtras,
                 hasWebSession: hasWebSession,
                 hasCLI: hasCLI,
                 // App Auto performs one real OAuth attempt; credential loading is execution, not planning.
-                hasOAuthCredentials: self.fetcher.runtime == .app))
+                hasOAuthCredentials: self.fetcher.configuration.runtime == .app))
         }
 
         private func logAutoPlan(_ plan: ClaudeFetchPlan) {
@@ -621,7 +617,7 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
                 "plannerOrder": plan.orderLabel,
                 "selected": plan.preferredStep?.dataSource.rawValue ?? "none",
                 "noSourceAvailable": "\(plan.isNoSourceAvailable)",
-                "webExtrasEnabled": "\(self.fetcher.useWebExtras)",
+                "webExtrasEnabled": "\(self.fetcher.configuration.useWebExtras)",
                 "oauthReadStrategy": ClaudeOAuthKeychainReadStrategyPreference.current().rawValue,
             ]
             for (index, step) in plan.orderedSteps.enumerated() {
@@ -648,32 +644,22 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
         }
 
         private func loadViaAutoCLI(model: String) async throws -> ClaudeUsageSnapshot {
-            guard let binary = ClaudeCLIResolver.resolvedBinaryPath(environment: self.fetcher.environment),
-                  await ClaudeCLIAuthStatusProbe.isLoggedIn(
-                      binary: binary,
-                      environment: self.fetcher.environment)
+            guard let binary = ClaudeCLIResolver
+                .resolvedBinaryPath(environment: self.fetcher.configuration.environment),
+                await ClaudeCLIAuthStatusProbe.isLoggedIn(
+                    binary: binary,
+                    environment: self.fetcher.configuration.environment)
             else {
                 throw ClaudeUsageError.parseFailed("Claude CLI is not logged in.")
             }
-            do {
-                return try await self.loadViaCLI(model: model, timeout: ClaudeUsageFetcher.cliAutoProbeTimeout)
-            } catch {
-                if error is CancellationError {
-                    throw error
-                }
-                guard Self.shouldRetryCLIProbe(after: error) else { throw error }
-                return try await self.loadViaCLI(model: model, timeout: ClaudeUsageFetcher.cliRetryProbeTimeout)
-            }
+            return try await self.loadViaCLIWithRetry(model: model, timeout: ClaudeUsageFetcher.cliAutoProbeTimeout)
         }
 
-        private func loadViaCLIWithRetry(model: String) async throws -> ClaudeUsageSnapshot {
+        private func loadViaCLIWithRetry(model: String, timeout: TimeInterval) async throws -> ClaudeUsageSnapshot {
             do {
-                return try await self.loadViaCLI(model: model, timeout: ClaudeUsageFetcher.cliProbeTimeout)
+                return try await self.loadViaCLI(model: model, timeout: timeout)
             } catch {
-                if error is CancellationError {
-                    throw error
-                }
-                guard Self.shouldRetryCLIProbe(after: error) else { throw error }
+                guard ClaudeUsageFetcher.isRetryableCLIProbeError(error) else { throw error }
                 return try await self.loadViaCLI(model: model, timeout: ClaudeUsageFetcher.cliRetryProbeTimeout)
             }
         }
@@ -731,26 +717,12 @@ public struct ClaudeUsageFetcher: ClaudeUsageFetching, Sendable {
         }
 
         private static func shouldTryDirectCLIUsage(after error: Error) -> Bool {
-            if case ClaudeStatusProbeError.timedOut = error {
+            if case let ClaudeStatusProbeError.parseFailed(message) = error,
+               message.lowercased().contains("could not load usage data")
+            {
                 return true
             }
-            if case let ClaudeStatusProbeError.parseFailed(message) = error {
-                let lower = message.lowercased()
-                return lower.contains("still loading usage") || lower.contains("could not load usage data")
-            }
-            let message = error.localizedDescription.lowercased()
-            return message.contains("timed out") || message.contains("timeout")
-        }
-
-        private static func shouldRetryCLIProbe(after error: Error) -> Bool {
-            if case ClaudeStatusProbeError.timedOut = error {
-                return true
-            }
-            if case let ClaudeStatusProbeError.parseFailed(message) = error {
-                return message.lowercased().contains("still loading usage")
-            }
-            let message = error.localizedDescription.lowercased()
-            return message.contains("timed out") || message.contains("timeout")
+            return ClaudeUsageFetcher.isRetryableCLIProbeError(error)
         }
     }
 }
@@ -843,7 +815,7 @@ extension ClaudeUsageFetcher {
     // MARK: - Public API
 
     public func detectVersion() -> String? {
-        ProviderVersionDetector.claudeVersion(environment: self.environment)
+        ProviderVersionDetector.claudeVersion(environment: self.configuration.environment)
     }
 
     public func debugRawProbe(model: String = "sonnet") async -> String {
@@ -866,6 +838,19 @@ extension ClaudeUsageFetcher {
 
     public func loadLatestUsage(model: String = "sonnet") async throws -> ClaudeUsageSnapshot {
         try await StepExecutor(fetcher: self).loadLatestUsage(model: model)
+    }
+
+    static func isRetryableCLIProbeError(_ error: Error) -> Bool {
+        guard !(error is CancellationError) else { return false }
+        if case ClaudeStatusProbeError.authenticationFailed = error { return false }
+        if case ClaudeStatusProbeError.timedOut = error {
+            return true
+        }
+        if case let ClaudeStatusProbeError.parseFailed(message) = error {
+            return message.lowercased().contains("still loading usage")
+        }
+        let message = error.localizedDescription.lowercased()
+        return message.contains("timed out") || message.contains("timeout")
     }
 
     public static func isCLIRateLimitError(_ error: Error) -> Bool {
@@ -948,6 +933,28 @@ extension ClaudeUsageFetcher {
         return try await ClaudeOAuthUsageFetcher.fetchProfile(accessToken: accessToken)
     }
 
+    private func appendingAccountIdentity(
+        to snapshot: ClaudeUsageSnapshot,
+        accessToken: String) async throws -> ClaudeUsageSnapshot
+    {
+        guard self.configuration.includeAccountIdentity else { return snapshot }
+        do {
+            let profile = try await Self.fetchOAuthProfile(accessToken: accessToken)
+            try Task.checkCancellation()
+            guard let owner = ClaudeVerifiedAccountOwner.ownerID(
+                accountUUID: profile.accountUuid,
+                email: profile.emailAddress,
+                organizationUUID: profile.organizationUuid)
+            else { return snapshot }
+            return snapshot.withAccountIdentity(owner)
+        } catch {
+            try Task.checkCancellation()
+            if ClaudeOAuthFetchError.isCancellation(error) { throw error }
+            // Optional identity failure must not invalidate successful usage or trigger credential repair.
+            return snapshot
+        }
+    }
+
     private static func attemptDelegatedRefresh(
         now: Date = Date(),
         timeout: TimeInterval = 15,
@@ -1017,7 +1024,7 @@ extension ClaudeUsageFetcher {
             guard let window,
                   let utilization = window.utilization
             else { return nil }
-            let resetDate = ClaudeOAuthUsageFetcher.parseISO8601Date(window.resetsAt)
+            let resetDate = ISO8601DateParser.parse(window.resetsAt)
             let resetDescription = resetDate.map(Self.formatResetDate)
             return RateWindow(
                 usedPercent: utilization,
@@ -1155,7 +1162,7 @@ extension ClaudeUsageFetcher {
         }
         let routineWindows: [NamedRateWindow] = definitions.compactMap { definition in
             guard let window = definition.window, let utilization = window.utilization else { return nil }
-            let resetDate = ClaudeOAuthUsageFetcher.parseISO8601Date(window.resetsAt)
+            let resetDate = ISO8601DateParser.parse(window.resetsAt)
             let resetDescription = resetDate.map(Self.formatResetDate)
             return NamedRateWindow(
                 id: definition.id,
@@ -1177,7 +1184,7 @@ extension ClaudeUsageFetcher {
                 kind: entry.kind,
                 group: entry.group,
                 percent: entry.percent,
-                resetsAt: ClaudeOAuthUsageFetcher.parseISO8601Date(entry.resetsAt),
+                resetsAt: ISO8601DateParser.parse(entry.resetsAt),
                 modelID: entry.scope?.model?.id,
                 modelName: entry.scope?.model?.displayName)
         }
@@ -1249,11 +1256,16 @@ extension ClaudeUsageFetcher {
             opus: opus,
             extraRateWindows: webData.extraRateWindows,
             providerCost: webData.extraUsageCost,
+            resetCredits: webData.resetCredits,
             updatedAt: Date(),
             accountEmail: webData.accountEmail,
             accountOrganization: webData.accountOrganization,
             loginMethod: webData.loginMethod,
-            rawText: nil)
+            rawText: nil,
+            accountID: self.configuration.includeAccountIdentity ? ClaudeVerifiedAccountOwner.ownerID(
+                accountUUID: nil,
+                email: webData.accountEmail,
+                organizationUUID: webData.accountOrganizationID) : nil)
     }
 
     private static func formatResetDate(_ date: Date) -> String {
@@ -1266,26 +1278,28 @@ extension ClaudeUsageFetcher {
     // MARK: - PTY-based probe (no tmux)
 
     private func loadViaPTY(model: String, timeout: TimeInterval = 10) async throws -> ClaudeUsageSnapshot {
-        guard let claudeBinary = ClaudeCLIResolver.resolvedBinaryPath(environment: self.environment) else {
+        guard let claudeBinary = ClaudeCLIResolver.resolvedBinaryPath(environment: self.configuration.environment)
+        else {
             throw ClaudeUsageError.claudeNotInstalled
         }
         let probe = ClaudeStatusProbe(
             claudeBinary: claudeBinary,
             timeout: timeout,
             keepCLISessionsAlive: self.keepCLISessionsAlive,
-            environment: self.environment)
+            environment: self.configuration.environment)
         let snap = try await probe.fetch()
 
         return try Self.makeSnapshot(from: snap)
     }
 
     private func loadViaDirectCLI(timeout: TimeInterval) async throws -> ClaudeUsageSnapshot {
-        guard let claudeBinary = ClaudeCLIResolver.resolvedBinaryPath(environment: self.environment) else {
+        guard let claudeBinary = ClaudeCLIResolver.resolvedBinaryPath(environment: self.configuration.environment)
+        else {
             throw ClaudeUsageError.claudeNotInstalled
         }
 
-        let workingDirectory = ClaudeStatusProbe.preparedProbeWorkingDirectoryURL()
-        var environment = ClaudeCLISession.launchEnvironment(baseEnv: self.environment)
+        let workingDirectory = try ClaudeCLISession.isolatedProbeWorkingDirectoryURL()
+        var environment = ClaudeCLISession.launchEnvironment(baseEnv: self.configuration.environment)
         environment["PWD"] = workingDirectory.path
         defer {
             ClaudeProbeSessionArtifactCleaner.cleanupProbeSessionArtifacts(
@@ -1295,7 +1309,7 @@ extension ClaudeUsageFetcher {
 
         let result = try await SubprocessRunner.run(
             binary: claudeBinary,
-            arguments: ["/usage"],
+            arguments: ["--strict-mcp-config"] + ClaudeCLISession.probeSettingsArguments + ["/usage"],
             environment: environment,
             timeout: timeout,
             standardInput: FileHandle.nullDevice,
@@ -1362,7 +1376,8 @@ extension ClaudeUsageFetcher {
         to snapshot: ClaudeUsageSnapshot,
         oauthAccessToken: String? = nil) async throws -> ClaudeUsageSnapshot
     {
-        guard self.useWebExtras || self.includePrepaidBalance, self.dataSource != .web else { return snapshot }
+        guard self.configuration.useWebExtras || self.includePrepaidBalance,
+              self.configuration.dataSource != .web else { return snapshot }
         guard self.webExtrasTimeout.isFinite,
               self.webExtrasTimeout >= 0,
               self.webExtrasTimeout <= TimeInterval(Int64.max)
@@ -1381,7 +1396,7 @@ extension ClaudeUsageFetcher {
                     try await ClaudeWebAPIFetcher.fetchUsage(
                         cookieHeader: header,
                         targetOrganizationID: self.webOrganizationID,
-                        includeUsageDetails: self.useWebExtras,
+                        includeUsageDetails: self.configuration.useWebExtras,
                         includePrepaidBalance: self.includePrepaidBalance)
                     { msg in
                         Self.log.debug(msg)
@@ -1390,7 +1405,7 @@ extension ClaudeUsageFetcher {
                     try await ClaudeWebAPIFetcher.fetchUsage(
                         browserDetection: self.browserDetection,
                         targetOrganizationID: self.webOrganizationID,
-                        includeUsageDetails: self.useWebExtras,
+                        includeUsageDetails: self.configuration.useWebExtras,
                         includePrepaidBalance: self.includePrepaidBalance)
                     { msg in
                         Self.log.debug(msg)
@@ -1413,7 +1428,7 @@ extension ClaudeUsageFetcher {
                 return snapshot
             }
             // Only merge usage/cost extras; keep identity fields from the primary data source.
-            let mergedExtraRateWindows = self.useWebExtras
+            let mergedExtraRateWindows = self.configuration.useWebExtras
                 ? Self.mergeExtraRateWindows(
                     primary: snapshot.extraRateWindows,
                     web: webData.extraRateWindows)
@@ -1421,7 +1436,7 @@ extension ClaudeUsageFetcher {
             let mergedProviderCost = Self.mergeProviderCost(
                 primary: snapshot.providerCost,
                 web: webData.extraUsageCost,
-                includeUsageDetails: self.useWebExtras)
+                includeUsageDetails: self.configuration.useWebExtras)
             if mergedProviderCost != snapshot.providerCost || mergedExtraRateWindows != snapshot.extraRateWindows {
                 return snapshot.replacingWebExtras(
                     extraRateWindows: mergedExtraRateWindows,
@@ -1462,7 +1477,8 @@ extension ClaudeUsageFetcher {
         }
 
         let emailMatches = primaryEmail != nil && primaryEmail == webEmail
-        let organizationMatches = primaryOrganization != nil && primaryOrganization == webOrganization
+        let oauthOrganization = Self.normalizedAccountField(oauthProfile?.organizationUuid)
+        let organizationMatches = oauthOrganization != nil && oauthOrganization == webOrganization
         return emailMatches || organizationMatches
     }
 
@@ -1538,70 +1554,6 @@ extension ClaudeUsageFetcher {
         let normalizedName = String(modelName.lowercased().unicodeScalars.filter(CharacterSet.alphanumerics.contains))
         guard !normalizedName.isEmpty else { return nil }
         return normalizedName
-    }
-
-    // MARK: - Process helpers
-
-    private static func which(_ tool: String) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        process.arguments = [tool]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        try? process.run()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard
-            let path = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-                !path.isEmpty
-        else { return nil }
-        return path
-    }
-
-    private static func readString(cmd: String, args: [String]) -> String? {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: cmd)
-        task.arguments = args
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        try? task.run()
-        task.waitUntilExit()
-        guard task.terminationStatus == 0 else { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8)
-    }
-
-    private static func oauthCredentialProbeErrorLabel(_ error: Error) -> String {
-        guard let oauthError = error as? ClaudeOAuthCredentialsError else {
-            return String(describing: type(of: error))
-        }
-
-        return switch oauthError {
-        case .decodeFailed:
-            "decodeFailed"
-        case .missingOAuth:
-            "missingOAuth"
-        case .mcpOAuthOnlyKeychain:
-            "mcpOAuthOnlyKeychain"
-        case .missingAccessToken:
-            "missingAccessToken"
-        case .notFound:
-            "notFound"
-        case .keychainAccessRevoked:
-            "keychainAccessRevoked"
-        case let .keychainError(status):
-            "keychainError:\(status)"
-        case .readFailed:
-            "readFailed"
-        case .refreshFailed:
-            "refreshFailed"
-        case .noRefreshToken:
-            "noRefreshToken"
-        case .refreshDelegatedToClaudeCLI:
-            "refreshDelegatedToClaudeCLI"
-        }
     }
 }
 

@@ -241,10 +241,9 @@ public enum CodexOAuthCredentialsStore {
     private static func readAuthData(at url: URL) throws -> Data {
         guard CodexCredentialFileAccess.permits(url) else { throw CodexOAuthCredentialsError.notFound }
         do {
-            // Read once instead of checking existence first. Codex publishes auth.json atomically,
-            // so a single read avoids a TOCTOU window and lets us distinguish a missing file from a
-            // transiently unreadable/partially published one without logging credentials.
-            return try CodexCredentialFileAccess.read(at: url, options: [.mappedIfSafe])
+            // Keep owned bytes while the owner may replace or truncate auth.json. The OAuth
+            // strategy retries publication races; retain filesystem error categories here.
+            return try CodexCredentialFileAccess.read(at: url)
         } catch {
             let nsError = error as NSError
             let missingFile =
@@ -460,13 +459,7 @@ public enum CodexOAuthCredentialsStore {
 
     private static func parseLastRefresh(from raw: Any?) -> Date? {
         guard let value = raw as? String, !value.isEmpty else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: value) {
-            return date
-        }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: value)
+        return ISO8601DateParser.parse(value)
     }
 
     private static func stringValue(

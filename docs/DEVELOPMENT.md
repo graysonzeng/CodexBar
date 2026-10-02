@@ -34,6 +34,19 @@ read_when:
 4. **Optional file log**: enable Debug → Logging → "Enable file logging" to write
    `~/Library/Logs/CodexBar/CodexBar.log` (verbosity defaults to "Verbose")
 
+## Swift Toolchain Compatibility
+
+The package supports Swift 6.2, including Xcode 26.3 on macOS 15. CI's
+`swift-build-macos-compatibility` job builds the app, CLI, and all test targets
+with that Xcode version using `swift build --build-tests`, without running them.
+It uses the existing macOS path gate, including every Swift change, and runs on
+draft PRs too. The aggregate `lint-build-test` gate requires a successful build
+when applicable; docs-only changes may skip it. Runtime tests remain on newer Xcode.
+
+Keep large initializer and `#expect` expressions simple: bind intermediate values
+to explicitly typed locals when the Swift 6.2 type checker struggles. Use
+`ProviderColor(hex:)` for provider colors instead of arithmetic inside spec initializers.
+
 ## Keychain Prompts (Development)
 
 ### First Launch After Fresh Clone
@@ -112,11 +125,10 @@ See the canonical [provider authoring guide](provider.md#adding-a-new-provider) 
 1. Add the provider identity to `Sources/CodexBarCore/Providers/Providers.swift`.
 2. Add the descriptor and the fetcher, parser, settings-reader, or status-probe pieces the provider needs under
    `Sources/CodexBarCore/Providers/YourProvider/`.
-3. Register the descriptor from `Sources/CodexBarCore/Providers/ProviderDescriptor.swift`.
+3. Follow the descriptor naming convention in the provider authoring guide.
 4. Add an app-side `ProviderImplementation` under `Sources/CodexBar/Providers/YourProvider/`; implementations can use
    protocol defaults when no custom UI or macOS integration is needed.
-5. Add the provider's exhaustive switch case to
-   `Sources/CodexBar/Providers/Shared/ProviderImplementationRegistry.swift`.
+5. Run `Scripts/regenerate-provider-manifests.sh` to update the Core descriptor manifest and the immutable app catalog.
 6. Add icon assets under `Sources/CodexBar/Resources/`.
 7. Add focused tests under `Tests/CodexBarTests/` and, for CLI/core behavior that must run on Linux, `TestsLinux/`.
 
@@ -131,16 +143,88 @@ See the canonical [provider authoring guide](provider.md#adding-a-new-provider) 
 
 Status-item creation checks the item's saved preferred position and its matching legacy key before assigning the
 autosave name. Malformed, non-finite, non-positive, and out-of-bounds positions are removed; unrelated items are
-untouched. The bound is at least the widest connected display's width in points and retains any larger legacy global
-coordinate bound, plus the existing safety padding. This avoids newly deleting menu-manager parking positions while
-covering wide displays left of the primary screen. When no display bound is available, finite positive positions are preserved. Isolated placement tests
-cover this cleanup without creating status items or changing the user's saved preferences. Passing these tests does
-not establish the cause of a position that changes again after launch; that requires runtime placement evidence.
+untouched, and each removed key is logged. The bound is the widest connected display's width in points plus a
+512-point margin, independent of display arrangement. Finite positive positions are preserved when no display bound
+is available. Unlike the older global-coordinate bound, this also clears menu-manager parking positions beyond that
+range. Preferred-position repair runs on each creation, independently of the one-time hidden-visibility repair flag.
+Items are created with zero length, assigned their stable autosave name, registered, then given variable length.
+Startup, provider vending, and visibility recovery all use this synchronous factory; recovery keeps `codexbar-merged`.
+Dictionary-backed placement tests and a recording item cover cleanup and creation order without creating live status
+items. AppKit exposes no public factory taking an autosave name, so zero-length creation cannot prove how a menu
+manager enumerates an item inside AppKit's factory. These tests also do not establish the writer of a position that
+changes after launch; recurring placement and Bartender UUID behavior still require isolated runtime evidence.
+
+Runtime removal and visibility changes preserve the current saved position if AppKit clears it. Runtime removal
+hides the item under its stable name, removes it with that name intact, then retires the autosave identity to prevent
+later cleanup from clearing the restored position. This includes startup visibility recovery when Control Center
+has not hosted the items yet: resetting a visible item's name before removal exposes a new automatic identity to
+menu bar managers. Replacement items keep the existing `codexbar-merged` and `codexbar-<provider>` names. During
+`applicationWillTerminate`, removal instead keeps the identity intact: renaming a host immediately before exit can
+leave a blank Control Center slot on macOS 26.6.2. Status-menu Quit requests termination after menu tracking unwinds
+and leaves cleanup to that callback; shutdown detaches menus without hiding or renaming the items before removal.
+The deterministic tests use in-memory defaults, an injected recording status bar, and a hosting probe that misses
+the first startup sample to check recovery and teardown ordering, identity, visibility, and placement restoration.
+They compare already-hosted relaunches with delayed hosting; they do not reproduce Sparkle or Bartender's UUID store.
+Native proof must use a signed, isolated app with visibly hosted
+merged and provider items: record the exact old window IDs, quit normally, confirm those windows disappear, then
+relaunch and check custom positions. Also exercise runtime removal/recreation and hide/show. Unit tests cannot prove
+Control Center host removal or placement after process exit. This does not diagnose older out-of-range placement reports.
 
 ### Run Tests Only
+
+The shell test runners and all Make test targets source `Scripts/test_environment.sh` before launching Swift.
+The Linux CI test step sources it too. It removes exported variables whose names contain `TOKEN`, `KEY`, `SECRET`,
+`PASSWORD`, `PASSWD`, `WEBHOOK`, `CREDENTIAL`, `COOKIE`, `PRIVATE`, or `_PAT`, ignoring case. Explicit non-secret
+exceptions preserve `CODEXBAR_ALLOW_TEST_KEYCHAIN_ACCESS`, `CODEXBAR_SUPPRESS_TEST_KEYCHAIN_ACCESS`,
+`CODEXBAR_DISABLE_KEYCHAIN_ACCESS`, and `CODEXBAR_USE_LOCAL_SWEETCOOKIEKIT`. Standard build and loader search paths
+(`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`, `DYLD_FRAMEWORK_PATH`, `LIBRARY_PATH`, and `PKG_CONFIG_PATH`) are also preserved:
+their `_PATH` suffix otherwise matches `_PAT`. Other matching variables, including `CODEXBAR_*` credentials, are removed.
+Use synthetic dictionaries or set synthetic sentinels inside fixtures; never depend on inherited real credentials.
+For direct `swift test`, source the script in a Bash subshell first. This does not authorize live account tests.
+
+`@ProcessEnvironment` provides count-only descriptions and reflection for stored process-environment dictionaries
+throughout the app, CLI, provider contexts, and session scanners. Use it on every stored environment, including
+captured configuration structs and optional dictionaries. Optional storage preserves `nil` versus an empty map;
+equality still compares the original contents. Keep formerly immutable properties `private(set)`.
+Explicit dictionary access still returns the original values for provider/subprocess use; never log that dictionary.
+Harness scrubbing remains essential and does not replace a review of debug output before sharing it.
+
+`ProcessEnvironmentStorageTests` scans shipped Swift in `Sources/` and `WidgetExtension/` for environment-named
+dictionary declarations (including optional, multiline, and `Dictionary<String, String>` spellings). This lexical
+tripwire checks locals too; its exact-source allowlist documents only transient dictionaries and rejects stale or
+duplicate exceptions. Computed getters and function parameters are not storage. Inferred types, aliases, differently
+named dictionaries, and explicit dictionary logging still require code review; this is not a Swift dataflow analyzer.
+
+Lint tools are installed at repository-pinned versions by `Scripts/install_lint_tools.sh`, with archive checksums
+verified before installation. TypeScript 7 installs its native package for the running Node platform and architecture
+(including Rosetta). Plugin typechecking uses only its declared libraries and source declarations, so unrelated
+ancestor `node_modules/@types` packages do not affect the result. SwiftFormat targets the package's Swift 6.2 floor.
+
 ```bash
 make test
 ```
+
+For focused iteration, use native SwiftPM filters with the same file/Keychain isolation and process containment:
+
+```bash
+make test-fast FILTER='AdaptiveRefreshPolicyTests'
+make test-skip-build FILTER='(?<suite>AdaptiveRefreshPolicyTests)'
+./Scripts/test_fast.sh --filter FirstSuite --filter SecondSuite --configuration debug
+```
+
+`FILTER` is passed literally, including Make/shell syntax and apostrophes. The script forwards all arguments to
+`swift test`; SwiftPM owns regex syntax and repeated-filter selection. Runs are serial by default and have a
+30-minute build-and-test deadline, configurable with `CODEXBAR_TEST_NATIVE_TIMEOUT`. An explicit `--skip-build` uses
+existing binaries. No framework search-path override is added.
+
+`make test` remains the complete sharded path. Measured expensive suites run in their own groups, retaining all
+selections and their deadlines while avoiding whole-batch retries. Apple-Silicon macOS CI includes the CLI entry suite;
+the former Intel-runner exclusion is retired.
+
+Claude OAuth gate tests use `ClaudeOAuthDefaultsFixtures()` so each test case owns an in-memory preferences store.
+Keep reset, expiry, and persisted-key assertions inside that scope; nested tasks inherit it, detached tasks do not.
+The gates retain their normal production defaults domain. Continue serializing shared gate state and same-host
+full-suite runs: isolating these preferences does not isolate every test dependency.
 
 `make test` and `make check` require a `python3` that provides `os.waitid` with `WNOWAIT`. Some macOS Python
 builds, including Apple's `/usr/bin/python3`, do not provide it. The test runner then stops before its initial
@@ -153,6 +237,10 @@ PATH="$(brew --prefix python@3.14)/libexec/bin:$PATH" make test
 ```
 
 `Scripts/test.sh --list-only` does not need process containment, but still invokes `swift test list`, which may build.
+
+The macOS test target explicitly links the existing Sparkle product and locates frameworks in the products directory
+beside its XCTest bundle. This supports native focused tests on fresh SwiftPM builds. The sharded runner retains its
+guarded runtime recovery for differing toolchain layouts, and `make test` remains the full validation path.
 
 Suite commands retain the default 180-second deadline, including SwiftPM startup and discovery.
 The runner reports elapsed time and owned PIDs every 30 seconds even when test output is buffered.
@@ -217,6 +305,10 @@ Cost performance and fair-scheduling corpora use exclusive initial fixture creat
 reads after setup has closed each file. This avoids per-file atomic publication and durability work
 without changing corpus contents or scan budgets. The shared atomic fixture writer remains available
 for replacement and publication tests.
+
+Menu fixtures use `enableTestProviders` to arrange their initial provider selection without repeatedly persisting
+already-correct config entries. The real setter still handles changed flags and selected-provider cleanup. Keep
+provider-toggle actions under test on the production setter; the fixture helper is for setup before observing changes.
 
 ### Cost scanner CPU regressions
 
@@ -444,7 +536,16 @@ verifier argument. `CodexBarLinuxTests` includes the portable `AntigravityLocalh
 both macOS and Linux. It checks session reuse and concurrent synthetic loopback failures without credentials;
 this coverage does not establish or fix the cause of Linux dispatch crashes.
 
+### Static Linux SDK
+
+CI and release builds install the static Linux SDK through `Scripts/install_swift_static_sdk.sh`. It downloads with
+`curl`, verifies the pinned SHA-256, and passes a local archive to `swift sdk install`, avoiding SwiftPM's Linux
+FoundationNetworking/TLS teardown crash. Portable lint checks cover checksum rejection, download failures, and installer
+failure propagation without downloading an SDK.
+Changes to the installer require a musl CI build.
+
 ### Format Code
+
 ```bash
 swiftformat Sources Tests
 swiftlint --strict
@@ -458,11 +559,27 @@ swiftlint --strict
 # Creates: CodexBar.app with ad-hoc signing by default
 ```
 
+For an identity-signed package, set `CODEXBAR_SIGNING=identity` and `APP_IDENTITY` to an installed Developer ID Application signing
+identity's full name, unique name substring, or SHA-1 certificate hash. Packaging resolves it through
+`security find-identity -p codesigning -v`, derives the Team ID from the selected identity, and signs with that
+certificate's hash. A missing or ambiguous match, a certificate other than Developer ID Application with a ten-character Team ID, or a conflicting
+`APP_TEAM_ID` fails before entitlements are generated. Self-signed and Apple Development/Distribution certificates are not supported by this
+path; use ad-hoc packaging or a Developer ID Application identity. Developer ID names carry a Team ID, whereas
+development certificate names can carry a personal ID. Explicit identity selections are also validated in LLDB builds.
+
+App and widget entitlements use the resolved team. Only upstream-team identity-signed release builds embed the
+upstream provisioning profile and CloudKit entitlements; other teams package without those upstream resources.
+Widget build failures and timestamp/signature failures still fail packaging. The sandboxed launch smoke check is
+retained; the existing `CODEXBAR_SKIP_LAUNCH_SMOKE=1` override explicitly reports that it skipped validation.
+
 ### Release Build (Notarized)
 ```bash
 ./Scripts/sign-and-notarize.sh
 # Creates: CodexBar-<version>.zip and CodexBar-<version>.dSYM.zip
 ```
+
+`sign-and-notarize.sh` honors `APP_IDENTITY` and passes the same selection to packaging; it defaults to the upstream
+Developer ID. Timestamping and hardened runtime remain required for all identity-signed releases.
 
 See `docs/RELEASING.md` for full release process.
 
@@ -514,7 +631,8 @@ defaults delete com.steipete.codexbar debugMainThreadHangWatchdog
 ### Cookie Management
 - Automatic browser import via SweetCookieKit
 - Keychain cache for some imported browser cookies and OAuth/device-flow credentials
-- `~/.codexbar/config.json` for provider settings, manual cookies, and stored API keys
+- The resolved config file for provider settings, manual cookies, and stored API keys: new installs use
+  `~/.config/codexbar/config.json`, while existing `~/.codexbar/config.json` installs retain their legacy path
 - Manual override for debugging
 - Browser-cookie import when cached sessions need refresh
 

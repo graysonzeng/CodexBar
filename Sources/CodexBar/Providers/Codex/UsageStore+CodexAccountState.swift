@@ -32,7 +32,7 @@ struct CodexAccountScopedRefreshGuard: Equatable {
 extension UsageStore {
     func accountScopedTokenSnapshot(for provider: UsageProvider) -> CostUsageTokenSnapshot? {
         guard provider == .codex, !self.settings.codexLocalSessionCostLedgerEnabled else {
-            return self.tokenSnapshots[provider.instanceID]
+            return self.tokenSnapshotPublications[provider.instanceID]?.snapshot
         }
         return self.tokenSnapshotForCurrentProviderConfig(for: provider)?.snapshot
     }
@@ -72,6 +72,9 @@ extension UsageStore {
 
         self.persistWidgetSnapshot(reason: "codex-account-refresh")
         phaseDidChange?(.completed)
+        #if DEBUG
+        self._test_codexAccountScopedRefreshDidComplete?()
+        #endif
     }
 
     @discardableResult
@@ -129,6 +132,7 @@ extension UsageStore {
     }
 
     func clearCodexPublishedUsageState(preserveSessionQuotaTransitionState: Bool = false) {
+        self.invalidateGenericWidgetUsage(for: .codex)
         self.snapshots.removeValue(forKey: .codex)
         self.errors[.codex] = nil
         self.lastSourceLabels.removeValue(forKey: .codex)
@@ -445,6 +449,8 @@ extension UsageStore {
                 expectedScopedEmail: self.currentCodexDashboardExpectedScopedEmail(),
                 trustedCurrentUsageEmail: self.trustedCurrentCodexUsageEmailForDashboardAuthority(),
                 dashboardSignedInEmail: dashboard.signedInEmail,
+                dashboardAccountID: dashboard.accountID,
+                requiresWorkspaceBalanceScope: dashboard.requiresWorkspaceBalanceScope,
                 knownOwners: self.codexDashboardKnownOwnerCandidates()),
             routing: CodexDashboardRoutingHints(
                 targetEmail: CodexIdentityResolver.normalizeEmail(routingTargetEmail),

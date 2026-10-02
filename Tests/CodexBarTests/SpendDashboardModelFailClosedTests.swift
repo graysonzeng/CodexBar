@@ -18,11 +18,8 @@ extension SpendDashboardModelTests {
             ]))
         let hugeA = Self.input(id: "huge-a", provider: .codex, currency: "USD", cost: .greatestFiniteMagnitude)
         let hugeB = Self.input(id: "huge-b", provider: .openai, currency: "USD", cost: .greatestFiniteMagnitude)
-        let group = try #require(SpendDashboardModel.build(
-            inputs: [invalid, hugeA, hugeB],
-            requestedDays: 30,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+        let group = try #require(Self.model(
+            inputs: [invalid, hugeA, hugeB]).groups.first)
 
         #expect(group.providers.first(where: { $0.id == "invalid" })?.totalCost == nil)
         #expect(group.totalCost == nil)
@@ -37,11 +34,9 @@ extension SpendDashboardModelTests {
             Self.entry(day: "2026-07-16", cost: 4, tokens: 40),
             Self.entry(day: "not-a-day", cost: 2, tokens: 20),
         ])
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: snapshot)],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.providers.first?.totalCost == nil)
         #expect(group.providers.first?.totalTokens == nil)
@@ -57,11 +52,9 @@ extension SpendDashboardModelTests {
         let snapshot = Self.snapshot(currency: "USD", entries: [
             Self.entry(day: "2026-02-30", cost: nil, tokens: nil, model: nil),
         ])
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: snapshot)],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.providers.first?.totalCost == nil)
         #expect(group.providers.first?.totalTokens == nil)
@@ -84,11 +77,9 @@ extension SpendDashboardModelTests {
             Self.entry(day: "2026-07-16", cost: 3, tokens: 30),
             Self.entry(day: "2026-07-01", cost: 99, tokens: 990),
         ])
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: snapshot)],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.providers.first?.totalCost == 3)
         #expect(group.providers.first?.totalTokens == 30)
@@ -135,11 +126,9 @@ extension SpendDashboardModelTests {
                     Self.entry(day: "2026-07-15", cost: .greatestFiniteMagnitude, tokens: .max),
                 ])),
         ]
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: inputs,
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.providers.allSatisfy { $0.totalCost == nil })
         #expect(group.providers.first(where: { $0.id == "nonfinite" })?.totalTokens == 2)
@@ -169,11 +158,9 @@ extension SpendDashboardModelTests {
                     .init(modelName: "overflow", costUSD: .greatestFiniteMagnitude, totalTokens: .max),
                 ]),
         ])
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: snapshot)],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.modelHistoryCompleteness == .incomplete)
         #expect(group.models.isEmpty)
@@ -185,11 +172,9 @@ extension SpendDashboardModelTests {
             Self.entry(day: "2026-07-16", cost: 4, tokens: 40, model: nil),
             Self.entry(day: "2026-07-15", cost: 2, tokens: 20),
         ])
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: snapshot)],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.modelHistoryCompleteness == .incomplete)
         #expect(group.models.isEmpty)
@@ -202,11 +187,9 @@ extension SpendDashboardModelTests {
             Self.entryWithBreakdowns(day: "2026-07-16", breakdowns: []),
             Self.entry(day: "2026-07-15", cost: 2, tokens: 20),
         ])
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: snapshot)],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.modelHistoryCompleteness == .complete)
         #expect(group.models.map(\.modelName) == ["test-model"])
@@ -219,11 +202,9 @@ extension SpendDashboardModelTests {
             Self.entry(day: "2026-07-16", cost: nil, tokens: nil, model: nil),
             Self.entry(day: "2026-07-15", cost: 2, tokens: 20),
         ])
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: snapshot)],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.modelHistoryCompleteness == .incomplete)
         #expect(group.models.isEmpty)
@@ -247,16 +228,12 @@ extension SpendDashboardModelTests {
                 .init(modelName: " \n ", costUSD: 0, totalTokens: 0),
                 .init(modelName: "named", costUSD: 1, totalTokens: 10),
             ])])
-        let incompleteGroup = try #require(SpendDashboardModel.build(
+        let incompleteGroup = try #require(Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: incomplete)],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
-        let completeGroup = try #require(SpendDashboardModel.build(
+            requestedDays: 7).groups.first)
+        let completeGroup = try #require(Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: complete)],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(incompleteGroup.modelHistoryCompleteness == .incomplete)
         #expect(incompleteGroup.models.isEmpty)
@@ -271,11 +248,9 @@ extension SpendDashboardModelTests {
             totalCost: 10,
             totalTokens: 100,
             breakdowns: [.init(modelName: "partial", costUSD: 4, totalTokens: 40)])])
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: snapshot)],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.modelHistoryCompleteness == .incomplete)
         #expect(group.models.isEmpty)
@@ -300,11 +275,9 @@ extension SpendDashboardModelTests {
                 Self.entry(day: "2026-07-16", cost: .greatestFiniteMagnitude),
             ]))
         let complete = Self.input(id: "complete", provider: .openai, currency: "USD", cost: 3)
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [missing, overflow, complete],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         #expect(group.dailyPoints.map(\.sourceID) == ["complete"])
         #expect(group.dailyPoints.map(\.cost) == [3])
@@ -322,11 +295,9 @@ extension SpendDashboardModelTests {
                 Self.entry(day: "2026-07-16", cost: 0, tokens: 0, model: nil),
             ]))
         let active = Self.input(id: "active", provider: .codex, currency: "USD", cost: 10)
-        let group = try #require(SpendDashboardModel.build(
+        let group = try #require(Self.model(
             inputs: [inactive, active],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar).groups.first)
+            requestedDays: 7).groups.first)
 
         let inactiveRow = try #require(group.providers.first(where: { $0.id == "inactive" }))
         #expect(inactiveRow.totalCost == 0)
@@ -344,11 +315,9 @@ extension SpendDashboardModelTests {
         let snapshot = Self.snapshot(
             currency: "CAD",
             entries: [Self.entry(day: "2026-07-16", cost: nil, tokens: 12)])
-        let model = SpendDashboardModel.build(
+        let model = Self.model(
             inputs: [.init(provider: .claude, displayName: "Claude", snapshot: snapshot)],
-            requestedDays: 7,
-            now: Self.now,
-            calendar: Self.calendar)
+            requestedDays: 7)
         let group = try #require(model.groups.first)
 
         #expect(group.totalCost == nil)
@@ -359,10 +328,10 @@ extension SpendDashboardModelTests {
         #expect(spendDashboardModelHistoryPresentation(group) == .partial)
     }
 
-    @Test
+    @Test(CodexCredentialFixtures())
     func `Codex requests freeze source home auth and cache identity`() throws {
         let id = try #require(UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"))
-        let home = FileManager.default.temporaryDirectory
+        let home = CodexCredentialFixtures.root
             .appendingPathComponent("SpendDashboardModelTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: home) }
@@ -376,12 +345,12 @@ extension SpendDashboardModelTests {
             isLive: false,
             canReauthenticate: true,
             canRemove: true)
-        let request = try #require(SpendDashboardSource.codexRequest(
+        let request = try #require(SpendDashboardSource.codexSource(
             account: account,
             homePath: home.path,
             providerName: "Codex",
             index: 1,
-            count: 2))
+            count: 2).request)
 
         #expect(request.source == .managedAccount(id: id))
         #expect(request.homePath == home.path)
@@ -389,20 +358,20 @@ extension SpendDashboardModelTests {
         #expect(!request.authFileWasReadable)
         #expect(request.displayName == "Codex · #2")
         #expect(request.cacheIdentity.count == 64)
-        #expect(SpendDashboardSource.scanDays == SpendDashboardSource.activityDays)
-        #expect(SpendDashboardSource.scanDays == 365)
-        #expect(SpendDashboardSource.codexRequest(
+        #expect(SpendDashboardSource.scanDays > SpendDashboardSource.activityDays)
+        #expect(SpendDashboardSource.activityDays == 365)
+        #expect(SpendDashboardSource.codexSource(
             account: account,
             homePath: "relative/path",
             providerName: "Codex",
             index: 0,
-            count: 1) == nil)
-        #expect(SpendDashboardSource.codexRequest(
+            count: 1).request == nil)
+        #expect(SpendDashboardSource.codexSource(
             account: account,
             homePath: home.appendingPathComponent("missing", isDirectory: true).path,
             providerName: "Codex",
             index: 0,
-            count: 1) == nil)
+            count: 1).request == nil)
 
         let changed = CodexVisibleAccount(
             id: account.id,
@@ -414,33 +383,30 @@ extension SpendDashboardModelTests {
             isLive: account.isLive,
             canReauthenticate: account.canReauthenticate,
             canRemove: account.canRemove)
-        let changedRequest = try #require(SpendDashboardSource.codexRequest(
+        let changedRequest = try #require(SpendDashboardSource.codexSource(
             account: changed,
             homePath: request.homePath,
             providerName: "Codex",
             index: 1,
-            count: 2))
+            count: 2).request)
         #expect(changedRequest.cacheIdentity != request.cacheIdentity)
-        let rebucketedRequest = try #require(SpendDashboardSource.codexRequest(
+        let rebucketedRequest = try #require(SpendDashboardSource.codexSource(
             account: account,
             homePath: request.homePath,
             providerName: "Codex",
             index: 1,
             count: 2,
-            bucketTimeZoneIdentifier: "Pacific/Kiritimati"))
+            bucketTimeZoneIdentifier: "Pacific/Kiritimati").request)
         #expect(rebucketedRequest.cacheIdentity != request.cacheIdentity)
 
         let authData = Data("{\"tokens\":\"synthetic\"}".utf8)
-        let authURL = CodexAuthFingerprint.authFileURL(homePath: home.path)
-        try authData.write(to: authURL)
-        let exact = try CodexCredentialFileAccess.withFixtureScope(.init(files: [authURL])) {
-            try #require(SpendDashboardSource.codexRequest(
-                account: account,
-                homePath: home.path,
-                providerName: "Codex",
-                index: 0,
-                count: 1))
-        }
+        try authData.write(to: CodexAuthFingerprint.authFileURL(homePath: home.path))
+        let exact = try #require(SpendDashboardSource.codexSource(
+            account: account,
+            homePath: home.path,
+            providerName: "Codex",
+            index: 0,
+            count: 1).request)
         #expect(exact.authFingerprint == CodexAuthFingerprint.fingerprint(data: authData))
         #expect(exact.authFileWasReadable)
         #expect(exact.cacheIdentity != request.cacheIdentity)

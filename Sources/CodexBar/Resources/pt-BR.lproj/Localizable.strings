@@ -1646,6 +1646,10 @@
 "agent_sessions_hide_unreachable_title" = "Ocultar hosts inacessíveis";
 "agent_sessions_hide_unreachable_subtitle" = "Oculta hosts quando a consulta de suas sessões falha.";
 
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d min";
+
 /* Overview share flow */
 "Share Usage Snapshot…" = "Compartilhar resumo de uso…";
 "Usage snapshot unavailable" = "Resumo de uso indisponível";

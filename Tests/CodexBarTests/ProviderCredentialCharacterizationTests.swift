@@ -37,6 +37,7 @@ struct ProviderCredentialCharacterizationTests {
             .init(provider: .deepgram, environmentKey: "DEEPGRAM_API_KEY"),
             .init(provider: .groq, environmentKey: "GROQ_API_KEY"),
             .init(provider: .llmproxy, environmentKey: "LLM_PROXY_API_KEY"),
+            .init(provider: .cliproxyapi, environmentKey: "CLIPROXYAPI_MANAGEMENT_KEY"),
             .init(provider: .chutes, environmentKey: "CHUTES_API_KEY"),
             .init(provider: .poe, environmentKey: "POE_API_KEY"),
             .init(provider: .litellm, environmentKey: "LITELLM_API_KEY"),
@@ -148,6 +149,7 @@ struct ProviderCredentialCharacterizationTests {
 
         let endpointFixtures: [(UsageProvider, String, String)] = [
             (.llmproxy, "LLM_PROXY_API_KEY", "LLM_PROXY_BASE_URL"),
+            (.cliproxyapi, "CLIPROXYAPI_MANAGEMENT_KEY", "CLIPROXYAPI_BASE_URL"),
             (.litellm, "LITELLM_API_KEY", "LITELLM_BASE_URL"),
             (.bifrost, "BIFROST_API_KEY", "BIFROST_BASE_URL"),
             (.clawrouter, "CLAWROUTER_API_KEY", "CLAWROUTER_BASE_URL"),
@@ -389,6 +391,7 @@ struct ProviderCredentialCharacterizationTests {
             .init(provider: .neuralwatt, environment: ["NEURALWATT_API_KEY": "token"], mode: "api"),
             .init(provider: .kimi, environment: ["KIMI_CODE_API_KEY": "token"], mode: "api"),
             .init(provider: .llmproxy, environment: ["LLM_PROXY_API_KEY": "token"], mode: "api"),
+            .init(provider: .cliproxyapi, environment: ["CLIPROXYAPI_MANAGEMENT_KEY": "token"], mode: "api"),
             .init(provider: .clawrouter, environment: ["CLAWROUTER_API_KEY": "token"], mode: "api"),
             .init(provider: .sub2api, environment: ["SUB2API_API_KEY": "token"], mode: "api"),
             .init(provider: .moonshot, environment: ["MOONSHOT_API_KEY": "token"], mode: "api"),

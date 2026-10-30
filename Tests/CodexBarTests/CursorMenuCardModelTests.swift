@@ -103,7 +103,7 @@ struct CursorMenuCardModelTests {
     }
 
     @Test
-    func `cursor billing cycle metrics show deficit and run out details`() throws {
+    func `cursor billing cycle metrics keep pace markers without captions`() throws {
         let now = Date(timeIntervalSince1970: 0)
         let reset = now.addingTimeInterval(6 * 24 * 3600)
         let cycleMinutes = 30 * 24 * 60
@@ -137,8 +137,8 @@ struct CursorMenuCardModelTests {
         #expect(model.metrics.map(\.title) == ["Total", "Cursor", "Third Party"])
         for metric in model.metrics {
             #expect(metric.percentLabel == "10% left")
-            #expect(metric.detailLeftText == "10% in deficit")
-            #expect(metric.detailRightText == "Runs out in 2d 16h")
+            #expect(metric.detailLeftText == nil)
+            #expect(metric.detailRightText == nil)
             #expect(metric.pacePercent == 20)
             #expect(metric.paceOnTop == false)
         }
@@ -348,9 +348,7 @@ struct CursorMenuCardModelTests {
             now: now))
 
         let metrics = Dictionary(uniqueKeysWithValues: model.metrics.map { ($0.title, $0) })
-        #expect(metrics["Total"]?.detailLeftText == "On pace")
-        #expect(metrics["Cursor"]?.detailLeftText == (cursorUsedPercent == 3 ? "On pace" : "23% in deficit"))
-        #expect(metrics["Third Party"]?.detailLeftText == "11% in deficit")
+        #expect(metrics["Third Party"]?.pacePercent == monthlyPace.expectedUsedPercent)
         #expect(metrics["Grok Bot"]?.detailLeftText == "35% in reserve")
         #expect(metrics["Grok Bot"]?.detailRightText == "Lasts until reset")
         #expect(metrics["Grok Bot"]?.pacePercent != nil)

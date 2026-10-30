@@ -1615,6 +1615,10 @@
 "agent_sessions_hide_unreachable_title" = "연결할 수 없는 호스트 숨기기";
 "agent_sessions_hide_unreachable_subtitle" = "세션을 가져오지 못한 호스트를 숨깁니다.";
 
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d분";
+
 /* Overview share flow */
 "Share Usage Snapshot…" = "사용량 개요 공유…";
 "Usage snapshot unavailable" = "사용량 개요를 사용할 수 없음";

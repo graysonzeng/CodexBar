@@ -40,6 +40,7 @@ extension UsageStore {
         _ = self.historicalPaceRevision
         _ = self.planUtilizationHistoryRevision
         _ = self.providerStorageFootprints
+        _ = self.codexRadarRevision
         return 0
     }
 
@@ -98,6 +99,19 @@ extension UsageStore {
     var attachedOpenAIDashboardSnapshot: OpenAIDashboardSnapshot? {
         guard self.openAIDashboardAttachmentAuthorized else { return nil }
         return self.openAIDashboard
+    }
+
+    static func isRunningTestsProcess() -> Bool {
+        let environment = ProcessInfo.processInfo.environment
+        let testKeys = ["XCTestConfigurationFilePath", "XCTestSessionIdentifier", "SWIFT_TESTING_ENABLED"]
+        return testKeys.contains(where: { environment[$0] != nil }) || CommandLine.arguments.contains { argument in
+            argument.contains("xctest") || argument.contains("swift-testing")
+        }
+    }
+
+    /// Returns the login method (plan type) for the specified provider, if available.
+    private func loginMethod(for provider: UsageProvider) -> String? {
+        self.snapshots[provider.instanceID]?.loginMethod(for: provider)
     }
 
     /// Returns true if the Claude account appears to be a subscription (Max, Pro, Ultra, Team).
@@ -185,6 +199,8 @@ final class UsageStore {
     @ObservationIgnored var sharedSpendDashboardObservationDebounceTask: Task<Void, Never>?
     @ObservationIgnored var sharedSpendDashboardTokenPublicationDebounceTask: Task<Void, Never>?
     var tokenErrors: [ProviderInstanceID: String] = [:]
+    @ObservationIgnored var cliproxyapiCollectionFailure: CLIProxyAPISpendCollectionFailure?
+
     var tokenRefreshInFlight: Set<ProviderInstanceID> = []
     var codexCostCatchUpActivity: CodexCostCatchUpActivity?
     var spendDashboardCodexCostCatchUpActivity: CodexCostCatchUpActivity?
@@ -211,6 +227,13 @@ final class UsageStore {
     var historicalPaceRevision: Int = 0
     var planUtilizationHistoryRevision: Int = 0
     var providerStorageFootprints: [ProviderInstanceID: ProviderStorageFootprint] = [:]
+    var codexRadarSnapshot: CodexRadarIntelligenceSnapshot?
+    var codexRadarRevision: Int = 0
+    @ObservationIgnored var codexRadarTask: Task<Void, Never>?
+    @ObservationIgnored var codexRadarGeneration: UInt64 = 0
+    @ObservationIgnored var codexRadarLastSuccessfulFetchAt: Date?
+    @ObservationIgnored var codexRadarLastFailureAt: Date?
+    @ObservationIgnored var _test_codexRadarTransportOverride: (any ProviderHTTPTransport)?
     @ObservationIgnored var lastCreditsSnapshot: CreditsSnapshot?
     @ObservationIgnored var lastCreditsSnapshotAccountKey: String?
     @ObservationIgnored var lastCreditsSnapshotOwnerGuard: CodexAccountScopedRefreshGuard?
@@ -889,20 +912,6 @@ final class UsageStore {
         self.completedRefreshCountForTesting += 1
         #endif
         return true
-    }
-
-    /// For demo/testing: drop the snapshot so the loading animation plays, then restore the last snapshot.
-    func replayLoadingAnimation(duration: TimeInterval = 3) {
-        let current = self.preferredSnapshot
-        self.snapshots.removeAll()
-        self.debugForceAnimation = true
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(duration))
-            if let current, let provider = self.enabledProviders().first {
-                self.snapshots[provider] = current
-            }
-            self.debugForceAnimation = false
-        }
     }
 
     // MARK: - Private
@@ -1588,6 +1597,20 @@ extension UsageStore {
 }
 
 extension UsageStore {
+    /// For demo/testing: drop the snapshot so the loading animation plays, then restore the last snapshot.
+    func replayLoadingAnimation(duration: TimeInterval = 3) {
+        let current = self.preferredSnapshot
+        self.snapshots.removeAll()
+        self.debugForceAnimation = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(duration))
+            if let current, let provider = self.enabledProviders().first {
+                self.snapshots[provider] = current
+            }
+            self.debugForceAnimation = false
+        }
+    }
+
     func retainCodingActivityIfNewer(_ date: Date) {
         if self.lastCodingActivityAt.map({ date > $0 }) ?? true {
             self.lastCodingActivityAt = date

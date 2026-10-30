@@ -280,6 +280,19 @@ func enableTestProviders(_ enabledProviders: Set<UsageProvider>, settings: Setti
     }
 }
 
+@MainActor
+func stubCodexRadarForUnrelatedRefreshTests(_ store: UsageStore) {
+    store._test_codexRadarTransportOverride = ProviderHTTPTransportHandler { request in
+        let url = request.url ?? CodexRadarIntelligence.endpointURL
+        let response = HTTPURLResponse(
+            url: url,
+            statusCode: 404,
+            httpVersion: "HTTP/1.1",
+            headerFields: nil) ?? HTTPURLResponse()
+        return (Data(), response)
+    }
+}
+
 #if os(macOS)
 @MainActor
 func testStatusBar() -> NSStatusBar {

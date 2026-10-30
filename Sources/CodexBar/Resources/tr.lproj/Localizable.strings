@@ -1649,6 +1649,10 @@
 "agent_sessions_hide_unreachable_title" = "Erişilemeyen ana bilgisayarları gizle";
 "agent_sessions_hide_unreachable_subtitle" = "Oturumları alınamadığında ana bilgisayarları gizle.";
 
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d dk";
+
 /* Overview share flow */
 "Share Usage Snapshot…" = "Kullanım özetini paylaş…";
 "Usage snapshot unavailable" = "Kullanım özeti kullanılamıyor";

@@ -1650,6 +1650,10 @@
 "agent_sessions_hide_unreachable_title" = "Nascondi gli host irraggiungibili";
 "agent_sessions_hide_unreachable_subtitle" = "Nascondi gli host quando il recupero delle loro sessioni non riesce.";
 
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d min";
+
 /* Overview share flow */
 "Share Usage Snapshot…" = "Condividi riepilogo utilizzo…";
 "Usage snapshot unavailable" = "Riepilogo utilizzo non disponibile";

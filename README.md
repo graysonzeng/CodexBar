@@ -148,6 +148,7 @@ See [CLI configuration](docs/cli-configuration.md) for the full flow.
 - [Grok](docs/grok.md) — Grok CLI billing RPC plus grok.com browser-session fallback.
 - [Groq](docs/groq.md) — Browser session for console spend and usage, with an Enterprise Prometheus API-key fallback.
 - [LLM Proxy](docs/llm-proxy.md) — API key + base URL for aggregate proxy quota stats and provider breakdowns.
+- [CLIProxyAPI](docs/cliproxyapi.md) — Management key + local CLIProxyAPI for Codex/Gemini/Antigravity/Grok quota.
 - [ClawRouter](docs/clawrouter.md) — API key for monthly budget, spend, requests, tokens, and routed-provider usage.
 - [sub2api](docs/sub2api.md) — Self-hosted gateway key quota, subscription limits, wallet balance, and per-key usage.
 - [Wayfinder](docs/wayfinder.md) — Local router gateway polling for health, per-route breakdown, savings, and decision latency.

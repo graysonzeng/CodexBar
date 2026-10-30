@@ -150,6 +150,16 @@ struct SpendProviderBreakdownRows: View {
             }
             .padding(.vertical, 5)
 
+            ForEach(breakdown.subscriptions) { row in
+                if let statusText = row.statusText {
+                    Text(statusText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 32)
+                }
+            }
+
             if self.showsSubscriptionChildren(breakdown) {
                 self.subsectionLabel(breakdown.subscriptions.contains { $0.sourceKind != .native }
                     ? L("Sources") : L("Accounts"))

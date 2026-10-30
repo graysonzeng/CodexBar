@@ -74,6 +74,7 @@ struct SpendDashboardModel: Equatable, Sendable {
         let totalCost: Double?
         let coveredDayCount: Int
         let sourceKind: SourceKind
+        let statusText: String?
 
         let incompleteRequestCount: Int
         /// The spend shown is a floor: some requests could not be priced, or the scan that produced
@@ -91,6 +92,7 @@ struct SpendDashboardModel: Equatable, Sendable {
             totalCost: Double?,
             coveredDayCount: Int,
             sourceKind: SourceKind = .native,
+            statusText: String? = nil,
             incompleteRequestCount: Int = 0,
             costIsLowerBound: Bool = false,
             tokensAreLowerBound: Bool = false)
@@ -106,6 +108,7 @@ struct SpendDashboardModel: Equatable, Sendable {
             self.totalCost = totalCost
             self.coveredDayCount = coveredDayCount
             self.sourceKind = sourceKind
+            self.statusText = statusText
         }
     }
 
@@ -687,6 +690,10 @@ struct SpendDashboardModel: Equatable, Sendable {
                 bounds: detailBounds,
                 calendar: calendar)
         }
+        // Provider-specific by design: CLIProxyAPI is a gateway overlay, so its rows are
+        // excluded from billed currency totals.
+        let billedProviders = providers.filter { $0.provider != .cliproxyapi }
+        let totalProviders = billedProviders.isEmpty ? providers : billedProviders
         var group = CurrencyGroup(
             currencyCode: currencyCode,
             providers: providers,
@@ -696,9 +703,12 @@ struct SpendDashboardModel: Equatable, Sendable {
                 bounds: selectedDay.map { $0...$0 } ?? detailBounds,
                 calendar: calendar),
             dailyPoints: dailyPoints,
-            dailySummaries: Self.dailySummaries(summaries: summaries, calendar: calendar),
-            totalTokens: Self.knownIntSum(providers.map(\.totalTokens)),
-            totalCost: Self.knownCostSum(providers.map(\.totalCost)),
+            dailySummaries: Self.dailySummaries(
+                summaries: summaries,
+                totalSourceIDs: Set(totalProviders.map(\.id)),
+                calendar: calendar),
+            totalTokens: Self.knownIntSum(totalProviders.map(\.totalTokens)),
+            totalCost: Self.knownCostSum(totalProviders.map(\.totalCost)),
             coveredDayCount: Self.dayCount(in: Self.commonCoverageInterval(summaries: summaries), calendar: calendar),
             chartDomain: Self.chartDomain(bounds: bounds, calendar: calendar),
             modelHistoryCompleteness: modelHistoryCompleteness,
@@ -822,10 +832,19 @@ struct SpendDashboardModel: Equatable, Sendable {
                     totalCost: entry.element.totalCost,
                     coveredDayCount: entry.element.coveredDayCount,
                     sourceKind: entry.element.input.sourceKind,
+                    statusText: Self.statusText(for: entry.element.input),
                     incompleteRequestCount: entry.element.incompleteRequestCount,
                     costIsLowerBound: entry.element.hasUnpricedRequests || entry.element.historyScanIsPartial,
                     tokensAreLowerBound: entry.element.historyScanIsPartial)
             }
+    }
+
+    private static func statusText(for input: ProviderInput) -> String? {
+        // Provider-specific by design: CLIProxyAPI status text is the labeled spend-snapshot history string.
+        guard input.provider == .cliproxyapi else { return nil }
+        let label = input.snapshot.historyLabel
+        guard let label, label != CLIProxyAPISpendSnapshot.observedDisclaimer else { return nil }
+        return label
     }
 
     /// Rolls per-project daily entries up to window-scoped rows, mirroring the proven-zero
@@ -1075,6 +1094,7 @@ struct SpendDashboardModel: Equatable, Sendable {
 
     private static func dailySummaries(
         summaries: [InputSummary],
+        totalSourceIDs: Set<String>,
         calendar: Calendar) -> [DailySummary]
     {
         guard summaries.contains(where: { $0.totalCost != nil || !$0.entries.isEmpty }),
@@ -1088,7 +1108,8 @@ struct SpendDashboardModel: Equatable, Sendable {
             let providerRows = indexed.map {
                 Self.dailyProviderRow(summary: $0.summary, entries: $0.entries[day] ?? [])
             }
-            let totalCost = Self.knownCostSum(providerRows.map(\.totalCost))
+            let totalRows = providerRows.filter { totalSourceIDs.contains($0.sourceID) }
+            let totalCost = Self.knownCostSum(totalRows.map(\.totalCost))
 
             let sortedRows = providerRows.enumerated().sorted { lhs, rhs in
                 switch (lhs.element.totalCost, rhs.element.totalCost) {
@@ -1104,8 +1125,8 @@ struct SpendDashboardModel: Equatable, Sendable {
             result.append(DailySummary(
                 day: day,
                 providers: sortedRows,
-                totalTokens: Self.completeIntSum(providerRows.map(\.totalTokens)),
-                requestCount: Self.knownIntSum(providerRows.map(\.requestCount)),
+                totalTokens: Self.completeIntSum(totalRows.map(\.totalTokens)),
+                requestCount: Self.knownIntSum(totalRows.map(\.requestCount)),
                 totalCost: totalCost))
             guard let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else { return [] }
             day = calendar.startOfDay(for: nextDay)

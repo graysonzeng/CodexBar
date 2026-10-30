@@ -59,6 +59,7 @@ enum ProviderImplementationManifest {
         GrokProviderImplementation(),
         GroqProviderImplementation(),
         PluginAPIKeyProviderImplementation(spec: LLMProxyProviderDescriptor.spec),
+        CLIProxyAPIProviderImplementation(),
         PluginAPIKeyProviderImplementation(spec: LiteLLMProviderDescriptor.spec),
         PluginAPIKeyProviderImplementation(spec: BifrostProviderDescriptor.spec),
         PluginAPIKeyProviderImplementation(spec: AixyProviderDescriptor.spec),

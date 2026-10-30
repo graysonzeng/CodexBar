@@ -1646,6 +1646,10 @@
 "agent_sessions_hide_unreachable_title" = "接続できないホストを非表示";
 "agent_sessions_hide_unreachable_subtitle" = "セッションの取得に失敗したホストを非表示にします。";
 
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d分";
+
 /* Overview share flow */
 "Share Usage Snapshot…" = "使用状況の概要を共有…";
 "Usage snapshot unavailable" = "使用状況の概要を利用できません";

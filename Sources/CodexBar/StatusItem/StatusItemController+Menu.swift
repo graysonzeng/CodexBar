@@ -73,6 +73,7 @@ extension StatusItemController {
             // producing an infinite open/close/rebuild flicker loop (#2652).
             self.store.noteMenuOpened()
             self.agentSessions.refreshOnMenuOpen()
+            self.scheduleCodexRadarIntelligenceRefreshIfOverviewSelected()
         }
 
         let trace = self.beginMenuOperationTrace("menuWillOpen", breadcrumb: "menuWillOpen")
@@ -559,6 +560,7 @@ extension StatusItemController {
         let t0 = CACurrentMediaTime()
         defer { self.logChartRenderDurationIfSlow("addOverviewRows(\(rows.count))", startedAt: t0) }
 
+        var addedContent = false
         let spendProviders = providerScopes.spend
         let spendModel = self.overviewSpendDashboardModel(providers: spendProviders)
         let spendProviderCount = self.overviewSpendSubscriptionCount(providers: spendProviders)
@@ -591,7 +593,11 @@ extension StatusItemController {
             if let shareItem = self.makeOverviewShareStatsMenuItem(model: spendModel) {
                 menu.addItem(shareItem)
             }
-            menu.addItem(.separator())
+            addedContent = true
+        }
+
+        if self.addOverviewCodexRadarCard(to: menu, width: menuWidth, separated: addedContent) {
+            addedContent = true
         }
 
         for (index, row) in rows.enumerated() {
@@ -1021,6 +1027,7 @@ extension StatusItemController {
                     case .overview:
                         self.settings.mergedMenuLastSelectedWasOverview = true
                         provider = self.resolvedMenuProvider()
+                        self.scheduleCodexRadarIntelligenceRefreshIfOverviewSelected()
                     case let .provider(selectedProvider):
                         self.settings.mergedMenuLastSelectedWasOverview = false
                         self.selectedMenuProvider = selectedProvider

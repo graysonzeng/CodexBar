@@ -164,9 +164,11 @@ extension UsageStore {
         // Provider-specific by design: mapped Claude costs include only the declared account directory.
         let claudeDirectory = provider == .claude ? self.claudeTokenCostConfigDirectory : nil
         let effectiveIncludePiSessions = includePiSessions && claudeDirectory == nil
-        // Provider-specific by design: the Codex ledger owns pricing refresh while Bedrock resolves AWS environment.
+        // Provider-specific by design: Codex local ledger skips models.dev pricing refresh;
+        // Bedrock and CLIProxyAPI rebuild the fetch environment so AWS/gateway credentials
+        // are not inherited from process env.
         let allowPricingRefresh = provider != .codex || !self.settings.codexLocalSessionCostLedgerEnabled
-        let environment = provider == .bedrock
+        let environment = (provider == .bedrock || provider == .cliproxyapi)
             ? ProviderRegistry.makeEnvironment(
                 base: self.environmentBase,
                 provider: provider,
@@ -712,6 +714,7 @@ extension UsageStore {
         snapshot: CostUsageTokenSnapshot,
         includeSettingsRevision: Bool = true) -> String
     {
+        // Provider-specific by design: Cursor Auto replaces the provisional cookie scope with the fetched identity.
         guard provider == .cursor,
               self.settings.cursorCookieSource == .auto,
               let fingerprint = snapshot.credentialScopeFingerprint
@@ -805,6 +808,7 @@ extension UsageStore {
         self.lastTokenFetchAt.removeAll()
         self.lastTokenFetchScope.removeAll()
         self.tokenFetchFailureCooldowns.removeAll()
+        // Provider-specific by design: Codex and Claude own the local-scan failure gates reset with this cache.
         self.tokenFailureGates[.codex]?.reset()
         self.tokenFailureGates[.claude]?.reset()
         return nil
@@ -814,6 +818,15 @@ extension UsageStore {
     /// `L` returns its argument unchanged for providers whose message is a plain English literal.
     nonisolated static func tokenCostNoDataMessage(for provider: UsageProvider) -> String {
         L(ProviderDescriptorRegistry.descriptor(for: provider).tokenCost.noDataMessage())
+    }
+
+    /// Provider-specific by design: CLIProxyAPI maps its queue-history disclaimer onto the shared token-error lane.
+    nonisolated static func cliproxyapiTokenError(from snapshot: CostUsageTokenSnapshot) -> String? {
+        let label = snapshot.historyLabel
+        if label == nil || label == CLIProxyAPISpendSnapshot.observedDisclaimer {
+            return snapshot.daily.isEmpty ? Self.tokenCostNoDataMessage(for: .cliproxyapi) : nil
+        }
+        return label
     }
 
     func regularTokenSnapshotIsConfirmedEmpty(
@@ -868,6 +881,16 @@ extension UsageStore {
         }
         self.lastTokenFetchScope[context.provider.instanceID] = completedCostScopeSignature
         self.startCodexCostCatchUpIfNeeded(afterRefreshing: context.provider)
+        // Provider-specific by design: CLIProxyAPI publishes cost even when history is empty and
+        // maps the snapshot history disclaimer onto the token-error lane.
+        if context.provider == .cliproxyapi {
+            let published = self.cliproxyapiPublishedSnapshot(snapshot)
+            self.publishTokenSnapshot(published, for: context.provider, accounting: result.accounting)
+            self.tokenErrors[context.provider.instanceID] = Self.cliproxyapiTokenError(from: published)
+            self.tokenFailureGates[context.provider.instanceID]?.recordSuccess()
+            self.persistWidgetSnapshot(reason: "token-usage")
+            return
+        }
 
         if try self.regularTokenSnapshotIsConfirmedEmpty(snapshot, for: context.provider) {
             self.publishConfirmedEmptyTokenSnapshot(for: context.provider, accounting: result.accounting)

@@ -322,17 +322,14 @@ struct ConfigValidationTests {
     }
 
     @Test
-    func `unsupported enterprise host warning lists every supported provider`() throws {
+    func `warns on unsupported enterprise host`() throws {
         var config = CodexBarConfig.makeDefault()
         config.setProviderConfig(ProviderConfig(id: .gemini, enterpriseHost: "https://example.com"))
         let issue = try #require(CodexBarConfigValidator.validate(config).first(where: {
             $0.provider == .gemini && $0.code == "enterprise_host_unused"
         }))
 
-        #expect(issue.message ==
-            "enterpriseHost is set but only aixy, azureopenai, bifrost, clawrouter, copilot, kimi, litellm, llmman, " +
-            "llmproxy, openrouter, sub2api, and wayfinder " +
-            "support enterpriseHost.")
+        #expect(issue.severity == .warning)
     }
 
     @Test

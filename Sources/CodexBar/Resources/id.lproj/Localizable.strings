@@ -1650,6 +1650,10 @@
 "agent_sessions_hide_unreachable_title" = "Sembunyikan host yang tidak terjangkau";
 "agent_sessions_hide_unreachable_subtitle" = "Sembunyikan host saat pengambilan sesinya gagal.";
 
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d mnt";
+
 /* Overview share flow */
 "Share Usage Snapshot…" = "Bagikan ringkasan penggunaan…";
 "Usage snapshot unavailable" = "Ringkasan penggunaan tidak tersedia";

@@ -1650,6 +1650,10 @@
 "agent_sessions_hide_unreachable_title" = "Amaga els amfitrions inaccessibles";
 "agent_sessions_hide_unreachable_subtitle" = "Amaga els amfitrions quan falla la consulta de les seves sessions.";
 
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d min";
+
 /* Overview share flow */
 "Share Usage Snapshot…" = "Comparteix la instantània d'ús…";
 "Usage snapshot unavailable" = "Instantània d'ús no disponible";

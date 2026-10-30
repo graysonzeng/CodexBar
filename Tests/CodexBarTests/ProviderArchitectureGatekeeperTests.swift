@@ -208,11 +208,11 @@ struct ProviderArchitectureGatekeeperTests {
         #if os(macOS)
         // Antigravity and Muse use bounded local usage readers.
         #expect(Set(descriptors.filter(\.tokenCost.supportsTokenSnapshot).map(\.id)) == [
-            .codex, .claude, .cursor, .vertexai, .bedrock, .antigravity, .muse, .pi, .opencodego,
+            .codex, .claude, .cursor, .vertexai, .bedrock, .antigravity, .cliproxyapi, .muse, .pi, .opencodego,
         ])
         #else
         #expect(Set(descriptors.filter(\.tokenCost.supportsTokenSnapshot).map(\.id)) == [
-            .codex, .claude, .vertexai, .bedrock, .antigravity, .muse, .pi, .opencodego,
+            .codex, .claude, .vertexai, .bedrock, .antigravity, .cliproxyapi, .muse, .pi, .opencodego,
         ])
         #endif
         #expect(Set(descriptors.filter { $0.cli.binaryLocator != nil }.map(\.id)) == [
@@ -3241,6 +3241,7 @@ struct ProviderArchitectureGatekeeperTests {
             reason: "This exact cost scanner dispatch selects a provider-owned transcript, cache, or pricing format."),
         AllowedProviderConstruct(
             path: "Sources/CodexBarCore/CostUsageFetcher.swift",
+
             anchor: "if provider == .vertexai {",
             expectedProviderIDs: ["claude", "vertexai"],
             expectedReferenceCount: 2,
@@ -4340,21 +4341,5 @@ struct ProviderArchitectureGatekeeperTests {
             directory.deleteLastPathComponent()
         }
         throw CocoaError(.fileNoSuchFile)
-    }
-
-    private static func hash(_ color: ProviderColor, into fingerprint: inout UInt64) {
-        for component in [color.red, color.green, color.blue] {
-            var bits = component.bitPattern
-            for _ in 0..<MemoryLayout<UInt64>.size {
-                fingerprint = (fingerprint ^ UInt64(UInt8(truncatingIfNeeded: bits))) &* 1_099_511_628_211
-                bits >>= 8
-            }
-        }
-    }
-
-    private static func hash(_ bytes: String.UTF8View, into fingerprint: inout UInt64) {
-        for byte in bytes {
-            fingerprint = (fingerprint ^ UInt64(byte)) &* 1_099_511_628_211
-        }
     }
 }

@@ -1650,6 +1650,10 @@
 "agent_sessions_hide_unreachable_title" = "إخفاء المضيفين غير المتاحين";
 "agent_sessions_hide_unreachable_subtitle" = "إخفاء المضيفين عند تعذّر جلب جلساتهم.";
 
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d د";
+
 /* Overview share flow */
 "Share Usage Snapshot…" = "مشاركة ملخص الاستخدام…";
 "Usage snapshot unavailable" = "ملخص الاستخدام غير متاح";

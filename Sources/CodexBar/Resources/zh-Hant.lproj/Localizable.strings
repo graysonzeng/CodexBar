@@ -1677,6 +1677,10 @@
 "agent_sessions_hide_unreachable_title" = "隱藏無法連線的主機";
 "agent_sessions_hide_unreachable_subtitle" = "擷取工作階段失敗時隱藏該主機。";
 
+/* CodexRadar Overview */
+"IQ" = "IQ";
+"%d min" = "%d 分鐘";
+
 /* Overview share flow */
 "Share Usage Snapshot…" = "分享用量總覽…";
 "Usage snapshot unavailable" = "用量總覽無法使用";

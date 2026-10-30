@@ -517,46 +517,20 @@ public struct CostUsageFetcher: Sendable {
         }
 
         let clampedHistoryDays = max(1, historyDays)
+        let remoteCalendar = overrideScannerOptions?.calendar ?? .current
 
         var remoteSnapshot: CostUsageTokenSnapshot?
         var remoteError: Error?
         do {
-            // Provider-specific by design: Bedrock uses AWS billing while Cursor uses its macOS dashboard session.
-            let calendar = overrideScannerOptions?.calendar ?? .current
-            let since = CostReportingPeriod.rolling(days: clampedHistoryDays).bounds(now: now, calendar: calendar)
-                .lowerBound
-            if provider == .bedrock {
-                let daily = try await Self.loadBedrockDailyReport(
-                    environment: environment,
-                    since: since,
-                    until: now)
-                remoteSnapshot = Self.tokenSnapshot(
-                    from: CostUsageDailyReport(
-                        data: CostReportingPeriod.rolling(days: clampedHistoryDays)
-                            .entries(daily.data, now: now, calendar: calendar),
-                        summary: nil),
-                    now: now,
-                    historyDays: clampedHistoryDays,
-                    useCurrentLocalDayForSession: false,
-                    calendar: calendar,
-                    historyCoverageIsEstablished: CostUsageLocalDay.key(from: now, calendar: calendar)
-                        <= CostUsageLocalDay.key(
-                            from: now, calendar: CostUsageBucketTimeZone.calendar(identifier: "UTC")),
-                    costProvenance: .vendorMetered)
-            }
-
-            #if os(macOS)
-            // Provider-specific by design: Cursor retries failed web cost queries against local CSV history.
-            if provider == .cursor {
-                remoteSnapshot = try await self.loadCursorTokenSnapshot(
-                    now: now,
-                    since: since,
-                    historyDays: clampedHistoryDays,
-                    calendar: calendar,
-                    cookieHeaderOverride: cursorCookieHeaderOverride)
-            }
-            #endif
+            remoteSnapshot = try await self.loadRemoteTokenSnapshot(
+                provider: provider,
+                environment: environment,
+                now: now,
+                historyDays: clampedHistoryDays,
+                cursorCookieHeaderOverride: cursorCookieHeaderOverride,
+                calendar: remoteCalendar)
         } catch {
+            // Provider-specific by design: only Cursor can recover a remote failure from its local CSV history.
             if provider != .cursor {
                 throw error
             }
@@ -2128,5 +2102,61 @@ extension CostUsageFetcher {
         }
 
         return "v2:\(scopedFiles.count):\(progressHasher.finalize())"
+    }
+
+    fileprivate static func loadRemoteTokenSnapshot(
+        provider: UsageProvider,
+        environment: [String: String],
+        now: Date,
+        historyDays: Int,
+        cursorCookieHeaderOverride: String?,
+        calendar: Calendar = .current) async throws -> CostUsageTokenSnapshot?
+    {
+        // Provider-specific by design: CLIProxyAPI remote spend is a gateway usage dump; Bedrock uses AWS Cost Explorer
+        // billing rather than local transcripts.
+        if provider == .cliproxyapi {
+            return try await CLIProxyAPISpendSnapshot.load(
+                environment: environment,
+                now: now,
+                historyDays: historyDays,
+                calendar: calendar,
+                customPricing: CostUsageCustomPricing.load())
+        }
+
+        // Provider-specific by design: Bedrock uses AWS billing while Cursor uses its macOS dashboard session.
+        let since = CostReportingPeriod.rolling(days: historyDays).bounds(now: now, calendar: calendar)
+            .lowerBound
+        if provider == .bedrock {
+            let daily = try await Self.loadBedrockDailyReport(
+                environment: environment,
+                since: since,
+                until: now)
+            return Self.tokenSnapshot(
+                from: CostUsageDailyReport(
+                    data: CostReportingPeriod.rolling(days: historyDays)
+                        .entries(daily.data, now: now, calendar: calendar),
+                    summary: nil),
+                now: now,
+                historyDays: historyDays,
+                useCurrentLocalDayForSession: false,
+                calendar: calendar,
+                historyCoverageIsEstablished: CostUsageLocalDay.key(from: now, calendar: calendar)
+                    <= CostUsageLocalDay.key(
+                        from: now, calendar: CostUsageBucketTimeZone.calendar(identifier: "UTC")),
+                costProvenance: .vendorMetered)
+        }
+
+        #if os(macOS)
+        // Provider-specific by design: Cursor billing requires the macOS dashboard cookie reader.
+        if provider == .cursor {
+            return try await self.loadCursorTokenSnapshot(
+                now: now,
+                since: since,
+                historyDays: historyDays,
+                calendar: calendar,
+                cookieHeaderOverride: cursorCookieHeaderOverride)
+        }
+        #endif
+        return nil
     }
 }

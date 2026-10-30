@@ -314,6 +314,7 @@ public struct ProviderMenuCardPresentation: Sendable {
     public let usesSyntheticRollingRegen: Bool
     public let usesRawPrimaryResetDescription: Bool
     public let resetWindowUsesWeeklyPace: Bool
+    public let hidesPaceCaptions: Bool
     public let blockingQuota: (windowID: String, message: String)?
 
     public init(
@@ -341,6 +342,7 @@ public struct ProviderMenuCardPresentation: Sendable {
         usesSyntheticRollingRegen: Bool = false,
         usesRawPrimaryResetDescription: Bool = false,
         resetWindowUsesWeeklyPace: Bool = false,
+        hidesPaceCaptions: Bool = false,
         blockingQuota: (windowID: String, message: String)? = nil)
     {
         self.usageNotesResolver = usageNotesResolver
@@ -367,6 +369,7 @@ public struct ProviderMenuCardPresentation: Sendable {
         self.usesSyntheticRollingRegen = usesSyntheticRollingRegen
         self.usesRawPrimaryResetDescription = usesRawPrimaryResetDescription
         self.resetWindowUsesWeeklyPace = resetWindowUsesWeeklyPace
+        self.hidesPaceCaptions = hidesPaceCaptions
         self.blockingQuota = blockingQuota
     }
 

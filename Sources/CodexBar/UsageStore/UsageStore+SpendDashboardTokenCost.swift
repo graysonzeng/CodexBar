@@ -67,6 +67,43 @@ extension UsageStore {
         self.spendDashboardTokenFailedTriggers.removeAll()
     }
 
+    func noteCLIProxyAPICollectionFailure(
+        _ failure: CLIProxyAPISpendCollectionFailure?,
+        for provider: UsageProvider)
+    {
+        let previous = self.cliproxyapiCollectionFailure
+        self.cliproxyapiCollectionFailure = failure
+        if let failure = self.currentCLIProxyAPICollectionFailure(for: provider) {
+            self.tokenErrors[provider.instanceID] = failure.error.errorDescription
+            return
+        }
+        if let previous,
+           self.tokenErrors[provider.instanceID] == previous.error.errorDescription
+        {
+            self.tokenErrors[provider.instanceID] = nil
+        }
+    }
+
+    func currentCLIProxyAPICollectionFailure(for provider: UsageProvider) -> CLIProxyAPISpendCollectionFailure? {
+        guard let failure = self.cliproxyapiCollectionFailure else { return nil }
+        let environment = ProviderRegistry.makeEnvironment(
+            base: self.environmentBase,
+            provider: provider,
+            settings: self.settings,
+            tokenOverride: nil)
+        guard CLIProxyAPISettingsReader.spendTrackingEnabled(environment: environment),
+              let settings = try? CLIProxyAPISettingsReader.resolve(environment: environment),
+              CLIProxyAPISpendSnapshot.fingerprint(settings: settings) == failure.fingerprint
+        else { return nil }
+        return failure
+    }
+
+    func cliproxyapiPublishedSnapshot(_ snapshot: CostUsageTokenSnapshot) -> CostUsageTokenSnapshot {
+        CLIProxyAPISpendSnapshot.overlayingCollectionFailure(
+            snapshot,
+            failure: self.cliproxyapiCollectionFailure)
+    }
+
     func refreshSpendDashboardTokenUsageNow(for provider: UsageProvider, force: Bool) async {
         guard Self.usesSpendDashboardIndependentTokenSnapshot(provider) else { return }
         guard self.settings.isCostUsageEffectivelyEnabled(for: provider) else {
@@ -154,6 +191,20 @@ extension UsageStore {
                 return
             }
             let hasUsage = !snapshot.daily.isEmpty || snapshot.meteredCostUSD != nil
+            // Provider-specific by design: CLIProxyAPI publishes labeled spend snapshots even when daily rows are
+            // empty.
+            if provider == .cliproxyapi {
+                self.lastSpendDashboardTokenFetchScope[provider.instanceID] = completedCostScopeSignature
+                self.spendDashboardTokenIncorporatedTriggers[provider.instanceID] = SpendDashboardTokenRefreshTrigger(
+                    providerConfigRevision: providerConfigRevision,
+                    scopeSignature: completedCostScopeSignature,
+                    regularPublicationRevision: trigger.regularPublicationRevision)
+                self.spendDashboardTokenFailedTriggers.removeValue(forKey: provider.instanceID)
+                self.publishSpendDashboardTokenSnapshot(
+                    self.cliproxyapiPublishedSnapshot(snapshot),
+                    for: provider)
+                return
+            }
             guard hasUsage || snapshot.historyCoverageIsEstablished else {
                 throw TokenSnapshotError.historyUnavailable
             }
@@ -198,6 +249,21 @@ extension UsageStore {
                     provider: provider,
                     attemptedAt: now,
                     costScopeSignature: costScopeSignature)
+                return
+            }
+            // Provider-specific by design: CLIProxyAPI refresh failures keep a labeled empty snapshot instead of
+            // clearing token history.
+            if provider == .cliproxyapi {
+                let failure = self.currentCLIProxyAPICollectionFailure(for: provider)
+                let labeled = CLIProxyAPISpendSnapshot.emptySnapshot(
+                    now: now,
+                    historyDays: historyDays,
+                    calendar: Calendar.current,
+                    label: failure?.error.errorDescription ?? error.localizedDescription,
+                    fingerprint: failure?.fingerprint,
+                    historyCoverageIsEstablished: false)
+                self.publishSpendDashboardTokenSnapshot(labeled, for: provider)
+                self.spendDashboardTokenFailedTriggers[provider.instanceID] = trigger
                 return
             }
             self.clearSpendDashboardTokenSnapshot(for: provider)

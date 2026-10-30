@@ -1586,7 +1586,10 @@ extension UsageStore {
             let hadPriorData = self.tokenSnapshotPublications[provider.instanceID]?.snapshot != nil
             let shouldSurface = self.tokenFailureGates[provider.instanceID]?
                 .shouldSurfaceError(onFailureWithPriorData: hadPriorData) ?? true
-            if shouldSurface {
+            // Provider-specific by design: collection failures remain visible independently of read retry gates.
+            if provider == .cliproxyapi, let failure = self.currentCLIProxyAPICollectionFailure(for: provider) {
+                self.tokenErrors[provider.instanceID] = failure.error.errorDescription
+            } else if shouldSurface {
                 self.tokenErrors[provider.instanceID] = error.localizedDescription
                 self.clearTokenSnapshot(for: provider)
             } else {

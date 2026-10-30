@@ -408,21 +408,35 @@ struct UserPluginMenuCardView: View {
     static func fingerprint(
         snapshot: UsageSnapshot?, error: String?, resetStyle: ResetTimeDisplayStyle, now: Date = .now) -> String
     {
-        let resets = [snapshot?.primary, snapshot?.secondary, snapshot?.tertiary].map { window in
+        let resets: [String] = [snapshot?.primary, snapshot?.secondary, snapshot?.tertiary].map { window in
             window.flatMap { UsageFormatter.resetLine(for: $0, style: resetStyle, now: now) } ?? ""
         }
-        return ([
+        let updatedAt: String = snapshot?.updatedAt.timeIntervalSinceReferenceDate.description ?? "none"
+        let detailCount = String(snapshot?.details.count ?? 0)
+        let primaryTitle = snapshot?.primary?.title ?? ""
+        let secondaryTitle = snapshot?.secondary?.title ?? ""
+        let tertiaryTitle = snapshot?.tertiary?.title ?? ""
+        let errorText = error ?? ""
+        let lastKnown: String
+        if error == nil {
+            lastKnown = ""
+        } else if let snapshot {
+            lastKnown = LastKnownUsagePresentation.message(capturedAt: snapshot.updatedAt, now: now)
+        } else {
+            lastKnown = ""
+        }
+        var parts: [String] = [
             codexBarLocalizationSignature(),
-            snapshot?.updatedAt.timeIntervalSinceReferenceDate.description ?? "none",
-            String(snapshot?.details.count ?? 0),
-            snapshot?.primary?.title ?? "",
-            snapshot?.secondary?.title ?? "",
-            snapshot?.tertiary?.title ?? "",
-            error ?? "",
-            error == nil ? "" : snapshot.map {
-                LastKnownUsagePresentation.message(capturedAt: $0.updatedAt, now: now)
-            } ?? "",
-        ] + resets).joined(separator: "|")
+            updatedAt,
+            detailCount,
+            primaryTitle,
+            secondaryTitle,
+            tertiaryTitle,
+            errorText,
+            lastKnown,
+        ]
+        parts.append(contentsOf: resets)
+        return parts.joined(separator: "|")
     }
 }
 #endif

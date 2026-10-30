@@ -145,21 +145,6 @@ struct OverviewSharePresentation {
 }
 
 extension StatusItemController {
-    func overviewProviderScopes(
-        enabledProviders: [UsageProvider]) -> (visible: [UsageProvider], spend: [UsageProvider])
-    {
-        let visible = self.settings.reconcileMergedOverviewSelectedProviders(
-            activeProviders: enabledProviders)
-        var seenSpendProviders = Set<UsageProvider>()
-        let spend = enabledProviders.filter { provider in
-            seenSpendProviders.insert(provider).inserted &&
-                self.settings.costSummaryShowsInline(for: provider)
-        }
-        return (
-            visible: visible,
-            spend: spend)
-    }
-
     func makeOverviewShareStatsMenuItem(model: SpendDashboardModel) -> NSMenuItem? {
         guard ShareStatsPayloadFactory.make(model: model, store: self.store) != nil else { return nil }
         let title = L("Share Usage Snapshot…")

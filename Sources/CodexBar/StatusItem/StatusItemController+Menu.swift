@@ -194,6 +194,7 @@ extension StatusItemController {
 
         self.clearMergedSwitcherContentCache(for: menu)
         let wasTracked = self.openMenus.removeValue(forKey: key) != nil
+        self.menuCardRefreshMonitor.isActive = !self.openMenus.isEmpty
         let menuTrackingEnded = wasTracked && self.openMenus.isEmpty
         if self.openMenus.isEmpty {
             self.parentMenuRebuildPendingAfterHostedSubviewClose = false
@@ -257,7 +258,8 @@ extension StatusItemController {
             showAllAccounts: showAllAccounts)
         let descriptor = self.makeMenuDescriptor(
             provider: selectedProvider,
-            includeContextualActions: !isOverviewSelected && !isPluginSelected)
+            includeContextualActions: !isOverviewSelected && !isPluginSelected,
+            selection: switcherSelection)
         let menuWidth = self.menuCardWidth(
             for: enabledProviders,
             selectedProvider: selectedProvider,
@@ -554,8 +556,9 @@ extension StatusItemController {
         // interaction closures must always reference the live menu they end up serving.
         let interactionMenu = captureMenu ?? menu
         let providerScopes = self.overviewProviderScopes(enabledProviders: enabledProviders)
-        let rows = self.store.mergedOverviewRows(for: providerScopes.visible)
-        guard !rows.isEmpty else { return false }
+        let rows = self.store.mergedOverviewRows(
+            for: providerScopes.visible,
+            claudeSwapInspectedAccountID: self.claudeSwapInspectedAccountID)
 
         let t0 = CACurrentMediaTime()
         defer { self.logChartRenderDurationIfSlow("addOverviewRows(\(rows.count))", startedAt: t0) }
@@ -600,14 +603,12 @@ extension StatusItemController {
             addedContent = true
         }
 
-        for (index, row) in rows.enumerated() {
+        for row in rows {
             let instanceID = row.provider
-            if index > 0 { menu.addItem(.separator()) }
             let identifier = "\(Self.overviewRowIdentifierPrefix)\(row.id)"
-            guard let provider = instanceID.firstPartyProvider,
-                  let model = row.model
-            else {
+            guard let provider = instanceID.firstPartyProvider, let model = row.model else {
                 if let plugin = UserProviderPluginRegistry.plugin(for: instanceID) {
+                    if addedContent { menu.addItem(.separator()) }
                     let item = self.makeUserPluginMenuCardItem(
                         plugin,
                         width: menuWidth,
@@ -621,9 +622,11 @@ extension StatusItemController {
                         item.action = #selector(self.selectOverviewProvider(_:))
                     }
                     menu.addItem(item)
+                    addedContent = true
                 }
                 continue
             }
+            if addedContent { menu.addItem(.separator()) }
             let storageText = row.accountID == nil ? self.store.storageFootprintText(for: provider) : nil
             let submenu = row.accountID == nil ? self.makeOverviewRowSubmenu(
                 provider: provider,
@@ -657,8 +660,9 @@ extension StatusItemController {
                 item.action = #selector(self.selectOverviewProvider(_:))
             }
             menu.addItem(item)
+            addedContent = true
         }
-        return true
+        return addedContent
     }
 
     func overviewProviderScopes(
@@ -1062,8 +1066,7 @@ extension StatusItemController {
             selectedIndex: display.activeIndex,
             width: width,
             onSelect: { [weak self, weak menu] index -> Task<Void, Never>? in
-                guard let self, let menu else { return nil }
-                guard display.accounts.indices.contains(index) else { return nil }
+                guard let self, let menu, display.accounts.indices.contains(index) else { return nil }
                 let selectedAccount = display.accounts[index]
                 self.advanceMenuInteraction(for: menu)
                 self.settings.setActiveTokenAccountIndex(index, for: display.provider)
@@ -1183,8 +1186,7 @@ extension StatusItemController {
         self.menuRefreshTasks[key] = Task { @MainActor [weak self, weak menu] in
             guard let self, let menu else { return }
             try? await Task.sleep(for: Self.menuOpenRefreshDelay)
-            guard !Task.isCancelled else { return }
-            guard self.isMenuRefreshEnabled else { return }
+            guard !Task.isCancelled, self.isMenuRefreshEnabled else { return }
             #if DEBUG
             self.onDelayedMenuRefreshAttemptForTesting?()
             #endif
@@ -1249,8 +1251,7 @@ extension StatusItemController {
             if !stillNeedsRetry {
                 self.clearSatisfiedDeferredMenuInteractionRefreshes(for: retryInstanceIDs)
             }
-            guard !Task.isCancelled else { return }
-            guard self.openMenus[ObjectIdentifier(menu)] != nil else { return }
+            guard !Task.isCancelled, self.openMenus[ObjectIdentifier(menu)] != nil else { return }
             self.invalidateMenus(
                 refreshOpenMenus: true,
                 deferOpenParentMenuRebuild: false,
@@ -1550,8 +1551,8 @@ extension StatusItemController {
     }
 
     func makeCostHistorySubmenu(provider: UsageProvider, width: CGFloat? = nil) -> NSMenu? {
-        guard ProviderDescriptorRegistry.descriptor(for: provider).tokenCost.supportsTokenCost else { return nil }
-        guard self.tokenSnapshotForCostHistorySubmenu(provider: provider)?.daily.isEmpty == false else { return nil }
+        guard ProviderDescriptorRegistry.descriptor(for: provider).tokenCost.supportsTokenCost,
+              self.tokenSnapshotForCostHistorySubmenu(provider: provider)?.daily.isEmpty == false else { return nil }
         if let width {
             return self.makeHostedSubviewPlaceholderMenu(
                 chartID: Self.costHistoryChartID,
@@ -1646,9 +1647,8 @@ extension StatusItemController {
     }
 
     func makeStatusComponentsSubmenu(provider: UsageProvider, width: CGFloat? = nil) -> NSMenu? {
-        guard self.store.statusChecksEnabled else { return nil }
-        guard Self.statusComponentsSubmenuProviders.contains(provider) else { return nil }
-        guard ProviderDescriptorRegistry.descriptor(for: provider).metadata.statusPageURL != nil else { return nil }
+        guard self.store.statusChecksEnabled, Self.statusComponentsSubmenuProviders.contains(provider),
+              ProviderDescriptorRegistry.descriptor(for: provider).metadata.statusPageURL != nil else { return nil }
         if let width {
             return self.makeHostedSubviewPlaceholderMenu(
                 chartID: Self.statusComponentsID,

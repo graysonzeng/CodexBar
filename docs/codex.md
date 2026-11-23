@@ -9,6 +9,15 @@ read_when:
 
 # Codex provider
 
+Existing accounts keep their default labels until renamed.
+
+In **Settings → Providers → Codex**, choose **Rename** beside an account to give it a name
+such as “Personal” or “School”. Names appear in account pickers and menu card headings.
+Clear the name to restore the default. Names are saved per login and workspace in CodexBar’s
+configuration; they do not change authentication, workspace names, or the system account.
+**Hide personal info** also hides custom account names in menus and account settings. Turn it off to rename an account. Names set before a saved account’s
+workspace is known survive reauthentication. Renaming does not invalidate usage fetches or cached usage.
+
 Enable **Settings → Menu Bar → Show all accounts in Overview** to include this provider’s cached account
 cards in Overview. The existing account source and provider selection remain unchanged; see
 [Overview account rows](configuration.md#menu-bar-controls).
@@ -19,6 +28,9 @@ for capture-age semantics and the existing history retention/privacy behavior.
 
 Codex reads account usage through PAT, OAuth, CLI RPC, or an explicitly selected web dashboard source.
 Local token/cost history is scanned separately; the CLI PTY parser is a manual diagnostic tool.
+
+Archived rollout state is detected from the filesystem and does not invalidate unchanged cost-cache rows.
+Changed archived usage still persists normally; cache formats and parser compatibility remain unchanged.
 
 ## Data sources + fallback order
 
@@ -51,8 +63,15 @@ Usage source picker:
 - The app reads reset-credit inventory once per refresh with a best-effort
   `GET https://chatgpt.com/backend-api/wham/rate-limit-reset-credits` using the same account-scoped OAuth context;
   the CLI requests it only when optional credits are included.
-- The menu and provider settings list every still-available expiry, while the optional credits setting controls
-  nearing-expiry notifications. CodexBar does not redeem or modify reset credits.
+- The menu and provider settings list every still-available expiry. The optional credits setting continues to
+  control the existing one-time summary within three days of expiry. Settings → Notifications → **Codex reset
+  credit expiry** adds reminders at 1 day and 1 hour before expiry. This separate toggle is off by default on
+  both new and existing installations; upgrading does not alter the summary behavior or its saved receipts.
+  Reminders run only when usage refreshes, with bounded hashed receipts in the existing local receipt store.
+  A late first refresh sends one notice and consumes earlier reminder stages; it does not replay missed alerts.
+  Repeated refreshes, restarts, and account changes do not repeat a recorded reminder. Credit display visibility
+  does not gate the opt-in countdowns. Used, redeeming, expired, unknown-status, and no-expiry credits stay silent.
+  CodexBar does not redeem or modify reset credits.
 - `rate_limit.primary_window` / `secondary_window` map to the session/weekly lanes.
 - When a response explicitly reports a fixed 30-day window (`limit_window_seconds: 2592000`),
   pace uses those 43,200 minutes rather than inferring a calendar month from the reset date.
@@ -76,6 +95,10 @@ Usage source picker:
   ahead. The later reset must not move backward. Exact OAuth, account, plan, unchanged positive reset-credit
   inventory across fresh observations (and historical inventory when present), minimum confirmation age, and
   candidate expiry checks still apply.
+- Eligible delayed candidates receive one noninteractive, account-scoped refresh at the existing 60-second minimum.
+  Repeated refreshes keep that pending work, and switching away updates only the candidate's account row.
+  Credential or source changes, provider disablement, and the 30-minute expiry stop stale follow-ups. Failed
+  confirmation waits for an ordinary refresh instead of starting an automatic retry loop.
 - Debug logs in `codex-weekly-reset-publication` include fixed reason codes for delayed-candidate
   creation, pruning, revalidation, and account-scoped storage requests. They distinguish source/confidence,
   timing, boundary, identity/plan compatibility, and credit-inventory failures without logging account or credit
@@ -156,6 +179,11 @@ again immediately before the live replacement. External writers can still race a
 
 Saved-account removal and import repair retain an old managed home while another saved record references
 the same path. Cleanup still requires the managed-home safety checks and releases the home after its last reference.
+
+Adding or reauthenticating a known workspace preserves same-email legacy rows when their saved credentials identify
+another workspace or owner, or cannot be read safely. Missing credential files retain the existing legacy
+reconciliation behavior. If the incoming login also lacks a workspace identity, an ambiguous replacement fails
+without changing the saved row or credentials.
 
 Registry write attempts under the account lock emit one bounded `codex-accounts` log entry with the operation,
 before/requested/written row counts, and success or failure. Successful managed-home deletions emit the operation
@@ -248,6 +276,7 @@ and stable account numbers distinguish rows while usable workspace labels remain
 - Preferences → Providers → Codex → OpenAI cookies (Automatic or Manual).
 - URL: `https://chatgpt.com/codex/cloud/settings/analytics#usage`.
 - Uses an off-screen `WKWebView` with a per-account `WKWebsiteDataStore`.
+- Clears disposable WebKit disk/memory caches in existing named stores at most daily across launches and after background use, preserving cookies and session storage. Launches without named stores skip WebKit initialization. Removing a managed account attempts to remove only its matching scoped store; unknown historical mappings retain sessions. See [WebKit storage and cleanup](webkit.md#persistent-data-and-cache-maintenance).
   - Store key: deterministic UUID from the normalized email.
 - WebKit store can hold multiple accounts concurrently.
 - Active page preparation and JavaScript evaluations share the refresh deadline. Expired pages are terminated and discarded; verified API usage remains available. Timeout diagnostics do not start new JavaScript after the deadline.
@@ -331,6 +360,7 @@ and stable account numbers distinguish rows while usable workspace labels remain
   - `Credits:` line
   - `5h limit` line → percent + reset text
   - `Weekly limit` line → percent + reset text
+- Time-only reset text retains its requested local hour when rolling into tomorrow, even if daylight saving skipped that hour today.
 - Detects update prompts and surfaces a "CLI update needed" error.
 
 ## Account identity resolution (for web matching)
@@ -375,6 +405,23 @@ there is no `auth.json`. Local cost estimates do not require account identity or
 Managed and profile homes retain their separate history scopes; a home already represented by a visible account
 is not added again as a local source. This does not read the CLI's keyring credentials.
 
+Each Codex home keeps its scan progress, discovery, coverage, and daily totals in the existing shared SQLite store.
+Switching homes does not reset another home's completed history or pending work, and retention only prunes the
+selected home's rows. Existing singleton state is migrated in place to its recorded home (or the default home when
+no root was recorded), retaining file IDs and history without creating per-home database copies.
+Existing OpenCode rows keep the shared writer's scope even when the last native scan used a custom home.
+
+When Codex replaces a previously scanned `X.jsonl` with its sibling `X.jsonl.zst`, CodexBar retains the
+cached usage and coverage for that logical rollout in either `sessions/` or `archived_sessions/`. If both
+forms exist, the plain file wins and its usage is counted once. CodexBar never reads or decompresses
+`.zst` files and does not create a decompressed transcript mirror.
+
+Only usage already parsed while the rollout was plain can be retained. Archives that CodexBar never
+saw as plain files are not counted or backfilled. Retained archived estimates survive parser updates,
+forced rescans, lookback changes, storage-budget enforcement, and switching Codex homes; they keep their
+saved accounting because they can no longer be reparsed. Normal date-retention operations can still expire
+these rows, and removing the archive removes its retained contribution. Clearing the cost cache loses this history.
+
 The static musl Linux CLI reserves an 8 MiB thread stack so scanning non-empty Codex session logs
 does not exhaust musl's smaller default stack. The scanner and cache format stay shared with glibc and macOS.
 
@@ -384,9 +431,19 @@ pricing provenance, missing values, and incomplete-request counts. Only bounded 
 the local result and returns a nonzero exit code. See [CLI host reporting](cli.md) for the versioned summary contract.
 
 For copied or resumed histories, `cost --provider codex --identified-only --format json --remote <ssh-host>`
-reports an **identified-request subtotal** over one UTC window. Strong native session/response identities are
-deduplicated; conflicting identities and legacy/unidentified usage are excluded and reported. Combined prices are
-unavailable (`costUSD: null`). This opt-in CLI mode does not change ordinary cost reports or account quota.
+reports an **identified-request subtotal** over one UTC window. Repeat `--remote` to include more SSH hosts. Strong native session/response identities are
+deduplicated; timestamp/token conflicts and legacy/unidentified usage are excluded and reported. Schema 2 exports
+exact billing model identifier, nullable Standard/Priority mode, and plan-inclusion evidence alongside tokens and time.
+Pricing disagreements retain tokens but permanently clear pricing evidence, including through re-export;
+trace evidence can differ across hosts. The collector prices accepted requests with one local pricing snapshot.
+`costUSD` is numeric only when all accepted requests are priced (an empty set is $0); otherwise it is explicitly null and
+`unpricedRequestCount` explains the gap. `partial` remains a source/accounting-coverage flag. These are
+API-equivalent estimates, not complete account spend. Unknown tiers and unsupported Priority rates stay
+unpriced even where ordinary cost reports use a Standard fallback. Qualified Auto-review requests are free
+unless collector custom rates override them; exporter custom rates do not change their qualification.
+Last recorded tiers are estimates: live `/fast` changes may not be materialized in history. Experimental
+`step_model_switching` can exceed the available turn-level model/tier evidence.
+Every participating CLI must support schema 2. This opt-in mode does not change ordinary reports or account quota.
 
 - Menu source selection:
   - By default, a selected managed account keeps its own `CODEX_HOME` session history.
@@ -403,6 +460,7 @@ unavailable (`costUSD: null`). This opt-in CLI mode does not change ordinary cos
     - `~/.codex/sessions/YYYY/MM/DD/*.jsonl`
     - `~/.codex/archived_sessions/*.jsonl` (flat; date inferred from filename when present)
     - Or `$CODEX_HOME/sessions/...` + `$CODEX_HOME/archived_sessions/...` if `CODEX_HOME` is set.
+    - `sessions` and `archived_sessions` may each be symlinked to another directory or disk, including flat and legacy nested logs. The archive sibling is selected from the configured home before resolving either link; nested directory links are not recursively followed. Existing incomplete linked-root inventories are rediscovered without clearing saved history.
   - Supported pi-compatible sessions:
     - `~/.pi/agent/sessions/**/*.jsonl`
     - `~/.omp/agent/sessions/**/*.jsonl`
@@ -416,17 +474,37 @@ unavailable (`costUSD: null`). This opt-in CLI mode does not change ordinary cos
     existing priority-request evidence selects that mode. Stored token rows are repriced without a history rebuild.
     Rates follow the [OpenAI model card](https://developers.openai.com/api/docs/models/gpt-6-astra) and
     [pricing table](https://developers.openai.com/api/docs/pricing).
+  - GPT-6.1 Sol Fast estimates use twice the applicable Standard API rates: $4/$20/$0.20 per million
+    input/output/cached-input tokens, with full-request long-context rates above 272K input tokens.
+    Rates follow the [model card](https://developers.openai.com/api/docs/models/gpt-6.1-sol) and
+    [Fast pricing table](https://developers.openai.com/api/docs/pricing?latest-pricing=fast).
+  - Native `service_tier: "ultrafast"` requests use published Ultrafast rates for GPT-6 Astra and GPT-6.1 Sol
+    (6× Standard), and GPT-6.2 Astra and GPT-6.2 Sol (3× before March 1, 2027 midnight Pacific,
+    6× from `2027-03-01T08:00:00Z`). The request timestamp selects the promotional rate, including
+    long-context pricing above 272K input tokens. GPT-6.2 Fast estimates use 2× Standard.
+    Rates follow the [OpenAI pricing table](https://developers.openai.com/api/docs/pricing).
+    Ultrafast contributes to total and per-model costs without being labeled Standard or Fast; a separate
+    menu split and schema-2 identified-request tier are not supplied. Schema 2 keeps those requests unpriced.
+    Unknown Ultrafast rates stay unavailable. Aggregate-only history without request timestamps or ownership
+    cannot establish the applicable price and stays unpriced rather than falling back to Standard.
+    Parser revision 15 reparses readable native history through the existing scan budget; the SQLite upgrade
+    preserves rows and checkpoints, including retained archives. Stored native Ultrafast evidence survives reopening
+    and takes precedence over turn-level Priority trace metadata. Already-compressed logs parsed before tier support
+    cannot be reclassified without original native tier evidence; their saved accounting is retained.
   - Valid JSON whitespace between event fields is accepted during initial scans and appended-session refreshes.
     Older cached files are reparsed once through the normal scan budget; compatible stores retain their rows and
     checkpoints until each file is refreshed.
   - Native Codex logs parse `event_msg` token_count entries and `turn_context` model markers; when both are present,
     `turn_context` is authoritative for the model bucket.
   - Native session `thread_settings_applied.thread_settings.service_tier` evidence applies to the following
-    `task_started` turn and subsequent turns until another settings event replaces it, using the existing published
-    Fast multipliers. The effective thread tier and known Priority turns survive incremental scans and SQLite reopening.
+    `task_started` turn and subsequent turns until another settings event replaces it, using the published
+    tier rates. A resumed `turn_context` refreshes the tier for subsequent requests without changing earlier
+    requests in the same turn. The effective tier survives incremental scans and SQLite reopening. Parser revision 14
+    refreshes older rows through bounded reparsing; compatible stores retain token history and checkpoints while
+    stale retained report totals are discarded.
     Without a known tier, or after an unknown tier is applied, pricing retains the Standard fallback;
-    subagents do not inherit a parent tier. Live or saved Priority trace evidence remains authoritative, including
-    after trace pruning. Compatible stores retain history while older parser revisions reparse within the scan budget.
+    subagents do not inherit a parent tier. Live or saved Priority trace evidence remains authoritative unless a request carries native Ultrafast evidence, including
+    after trace pruning.
   - Direct forks preserve the inherited origin of cumulative counters when resolving parent snapshots, including
     intermediate sessions that are empty at the child's fork time. Repeated inherited snapshots contribute no
     new usage; descendants count only their deltas. Ancestry remains a cache dependency, so ancestor changes
@@ -478,7 +556,9 @@ unavailable (`costUSD: null`). This opt-in CLI mode does not change ordinary cos
     connection, database identity and SQLite change observations,
     checking again under the writer lock. Filesystem/anchor and catch-up reconciliation still run at comparison
     time; a concurrent database change requests a rescan. Fresh database opens retain integrity validation.
+  - Cost cache retention skips identical metadata writes and reads only paths when checking for archived rollouts. Explicit scan bounds avoid loading fallback metadata. Unchanged protected histories keep their warm scan baseline even above the cache budget.
   - Scan loads retain decoded baselines for up to four recently used cache roots. Transaction-validated freshness and priority-cursor updates share one metadata write and keep the decoded history warm. Content changes, external commits, failed operations, schema changes, and database replacement invalidate reuse. Each load still issues a fresh save receipt and rechecks transcript identity.
+  - Unchanged native cost scans commit their freshness and priority cursor updates without forcing a WAL checkpoint each cycle. Changed native history saves and page reclamation retain their forced checkpoints; cache byte budgets include pages still held in WAL and keep counting the physical database size while a reader blocks truncation. Readers and reopened stores see the committed updates. The WAL is shared with imported history, so this also defers incidental synchronization of other committed frames to SQLite's normal checkpoint policy. Power-loss synchronization timing can therefore differ when SQLite uses `synchronous=NORMAL`.
   - Up to four recently used cache roots retain validated reader connections and decoded status/activity data.
     External writes invalidate cached data; database replacement or incompatible metadata reopens the reader through
     existing validation on its next access. Every read still reconciles file identities, and detailed report history
@@ -495,6 +575,8 @@ unavailable (`costUSD: null`). This opt-in CLI mode does not change ordinary cos
   - Saves skip unchanged files using the transaction-validated scan baseline, so a changed session or scan metadata
     does not rewrite every retained file's metadata, aggregates, fork state, buffers, and accumulator. Changed files,
     parser/calendar migrations, and incomplete persisted row sets still take the normal persistence path.
+    Unchanged checks reuse decoded completion flags instead of rebuilding the restored file map. Incoming optional
+    flags still normalize, and filesystem reconciliation runs both before and under the writer lock.
     Hydrating an empty token history does not force a content rewrite when no snapshot rows are stored for that file.
     Clearing a non-empty history still removes its snapshot rows and preserves sibling histories.
   - Excess cached request rows trigger bounded revalidation of readable, unchanged session files. Ordered source
@@ -579,6 +661,7 @@ unavailable (`costUSD: null`). This opt-in CLI mode does not change ordinary cos
   still scan local history. Faster provider refreshes still update quota/status. The scanner's default 60-second
   debounce is a separate internal limit, bypassed by forced scans and catch-up passes; it is not the app's refresh cadence.
 - Usage & Spend catch-up remains inactive after a no-progress or error pause until you choose **Refresh** in the dashboard toolbar or catch-up panel. Opening the dashboard or receiving background updates does not retry those terminal pauses. Low-power and thermal pauses can still recover automatically; this retry policy does not change cached history or token accounting.
+- Growth in a fully read rollout's scan target does not hide a stalled parent dependency. Unfinished scan targets and newly resolved dependencies still count as progress; a no-progress pause keeps the existing explicit Refresh retry policy.
 - Each catch-up worker permits one recovery per cache when a repeated progress state comes from a time-budget yield before any file attempt or byte read. Automatic recovery waits for the normal cooldown, then uses a full scan budget. Repeated empty passes and semantic cycles still pause; user stops, errors, and power or thermal constraints keep their existing behavior.
 - Dashboard synchronization can clear a no-progress pause or retire a sleeping automatic worker with a read-only check when another scan has completed the same accounts, roots, time zone, and requested history window. Synchronization during that check queues another coverage read before completion can publish. It does not start a scan, change scan budgets or duty-cycle delays, or override a user stop or error. Completion uses confirmed cache coverage rather than comparing scan start times with the pause time.
 - Menu cost catch-up keeps user stops and no-progress/error pauses across scheduled refreshes. Choose **Refresh** to retry after the worker stops. Successful completion still honors queued refreshes for newly discovered history; low-power and thermal pauses can recover automatically.
@@ -688,6 +771,16 @@ dashboard labels its values as local estimates and keeps currencies separate.
 Cost refreshes and cached dashboard loads share each file report between session and project views. Daily and
 project totals retain their own pricing evidence scopes. All preparation is local to one call, so later loads use
 their current rows, prices, roots, dates, and time zone without retaining another report cache.
+Project accumulation updates its file and report collections in place, avoiding repeated copies as session counts
+grow. Native caches from the previous parser fingerprint retain their rows, checkpoints, and report totals.
+
+## Upcoming weekly reset warnings
+
+Settings → Notifications → **Upcoming reset warnings** is off by default. When enabled, accepted Codex usage
+refreshes warn at 24 hours and 1 hour before a reported weekly reset while quota remains. A late first refresh
+sends only the closest reminder; earlier stages are consumed rather than replayed. Account-scoped receipts
+survive app restarts. An account must be identified; missing reset times, expired windows, and exhausted quota
+stay silent. Hide personal information also applies to these notifications. There is no extra polling timer.
 
 ## Local storage footprint
 

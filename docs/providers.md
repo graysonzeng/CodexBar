@@ -8,7 +8,7 @@ read_when:
 
 # Providers
 
-CodexBar currently registers 110 provider IDs. Some companies expose multiple surfaces, such as Codex vs OpenAI API or
+CodexBar currently registers 116 provider IDs. Some companies expose multiple surfaces, such as Codex vs OpenAI API or
 OpenCode vs OpenCode Go, because the auth source and quota shape differ.
 
 ## Fetch strategies (current)
@@ -64,6 +64,8 @@ double-count the same traffic. An optional toggle can hide native Codex while Op
 emits the currently aggregated model (provenance, mix, coverage). Invalid numeric fields are omitted while valid
 neighboring fields remain available. Existing cached rows are reparsed once after the numeric parser update;
 subsequent unchanged reads continue to reuse the corrected cache.
+Imports read 64 KiB chunks and preserve records spanning reads, avoiding a separate whole-file buffer and newline
+index. Decoded usage rows and the current unfinished record still require memory proportional to their size.
 Rows explicitly billed to `nous` appear under Nous Portal with OpenCodex provenance, even when their model IDs
 name another vendor. Their dollar amounts are estimates from exact Nous/model pricing, never Portal credits or
 the producer's ignored `_meta` values; missing rates stay unpriced. See [Nous local usage and spend](nous.md#local-usage-and-spend).
@@ -95,7 +97,7 @@ complete when the available scan window covers fewer days.
 | Kimi | Kimi Code API key (`api`), then `kimi-auth` cookie/manual token/env fallback (`web`). |
 | Kilo | API token from config/env → usage API (`api`); auto falls back to CLI session auth (`cli`). |
 | Copilot | Device-flow/env/config token → `copilot_internal` API (`api`). |
-| Kiro | CLI command via `kiro-cli chat --no-interactive "/usage"` (`cli`). |
+| Kiro | Existing CLI token → `GetUsageLimits` API, then V2 CLI report (`cli`). |
 | Vertex AI | Google ADC OAuth (gcloud) → Cloud Monitoring quota usage (`oauth`). |
 | Augment | `auggie` CLI first, then browser-cookie web fallback (`cli`, `web`). |
 | JetBrains AI | Local XML quota file (`local`). |
@@ -123,7 +125,7 @@ complete when the available scan window covers fewer days.
 | Synthetic | API key from config/env → quota API (`api`). |
 | OpenRouter | API token (config, overrides env) → key quota and credits APIs; a management key enables account Activity on the official API (`api`). |
 | Perplexity | Browser cookies/manual cookie/env session token → credits API (`web`). |
-| Xiaomi MiMo | Browser cookies → balance/token plan endpoints (`web`). |
+| Xiaomi MiMo | Token Plan API key (`api`), or browser cookies → balance/token plan endpoints (`web`). |
 | Doubao | API key from config/env → Volcengine Ark chat-completions probe (`api`). |
 | Sakana AI | Manual Cookie header → billing page parser for 5-hour/weekly quota windows plus a best-effort pay-as-you-go credit balance (`web`). |
 | Abacus AI | Browser cookies → compute points + billing API (`web`). |
@@ -157,7 +159,7 @@ complete when the available scan window covers fewer days.
 | Poe | API key → current point balance and best-effort points history (`api`). |
 | Chutes | API key from config/env → subscription usage and quota API (`api`). |
 | Neuralwatt | API key from config/env → `/v1/quota` subscription kWh usage and prepaid balance (`api`). |
-| Helmcode | Browser or manual dashboard cookies → tenant-scoped model quotas, explicit premium rolling tiers, and Cloud-only prepaid balance (`web`). |
+| Helmcode | Browser or manual dashboard cookies → tenant-scoped credit plans or model quotas, explicit premium rolling tiers, and Cloud-only prepaid balance (`web`). |
 | [ZenMux](zenmux.md) | Management API key from config/env → five-hour and seven-day quota windows plus PAYG balance (`api`). |
 | ai& | API key from config/env → 30-day organization spend summed from the request logs API (`api`). |
 | xAI | Management key + team ID from config/env → prepaid balance and 30-day daily spend from the Management API (`api`). |
@@ -167,6 +169,8 @@ complete when the available scan window covers fewer days.
 | [Pi](pi.md) | Local Pi/OMP assistant transcripts → token history and API-rate cost estimates (`local`); no subscription quota. |
 <!-- Generated provider additions: Scripts/regenerate-provider-docs.mjs -->
 
+Additional providers, generated from each provider's documentation:
+
 | Provider | Source |
 |---|---|
 | [Langdock](langdock.md) | Selected Edge, Chrome, or Safari profile → personal included session and weekly limits (`web`, macOS). |
@@ -174,7 +178,7 @@ complete when the available scan window covers fewer days.
 | [X API](xapi.md) | Browser or manual console.x.com cookies for prepaid and free credits, including negative balances. |
 | [Future AGI](futureagi.md) | API key and secret key (billing-period usage, allowances, and estimated cost). |
 | [LithosAI](lithosai.md) | Browser or manual console cookies for prepaid USD balance and optional UTC spend. |
-| [WorkBuddy](workbuddy.md) | Chrome or manual www.workbuddy.cn cookies for the monthly credits allowance, plan name, and cycle reset. |
+| [WorkBuddy](workbuddy.md) | Chrome or manual www.workbuddy.cn cookies for the monthly credits allowance, plan name, cycle reset, and the platform reward credits. |
 | [Tavily](tavily.md) | API key for account-plan, per-key, and pay-as-you-go credit totals. |
 | [Linkup](linkup.md) | API key for the current prepaid USD credit balance. |
 | [TinyApi](tinyapi.md) | Browser or manual session cookies for aggregate available credits. |
@@ -191,6 +195,11 @@ complete when the available scan window covers fewer days.
 | [Trae CN](traecn.md) | Browser session for account credit usage. |
 | [Chatbox AI](chatbox.md) | API token |
 | [abliteration.ai](abliteration.md) | API key for prepaid USD credits and cumulative usage. |
+| [OpenDesign](opendesign.md) | Browser or manual session cookies for the active workspace's five-hour and weekly subscription allowance. |
+| [SiliconFlow](siliconflow.md) | API key in Auto/API; explicit Web for the China (CNY) console balance. International API balances use USD. |
+| [Tripo](tripo.md) | API key for available and reserved account credits from the official account balance endpoint. |
+| [Google Developer Program](googledeveloper.md) | Browser or manual me.developers.google.com session cookies for the current monthly Gen AI & Cloud credit of Google AI Pro and Ultra. |
+| [TrustedRouter](trustedrouter.md) | API key for the key's remaining limit and daily, weekly, monthly, and total spend. |
 
 <!-- End generated provider additions -->
 
@@ -497,8 +506,9 @@ provider-specific cookie validation, endpoints, login detection, and error trans
 
 ## Synthetic
 - API key from `~/.codexbar/config.json` (`providers[].apiKey`) or `SYNTHETIC_API_KEY`.
-- The menu card shows rolling five-hour, weekly token, and search-hourly quota lanes when present. The compact menu bar
-  metric uses the five-hour or weekly lane; weekly credit regeneration details appear when returned.
+- The menu card shows weekly credit and search-hourly quota lanes for current plans, including weekly regeneration
+  details when returned. Older plans can also supply a rolling five-hour quota. Known lanes suppress the legacy
+  subscription request counter; a subscription-only response remains supported.
 - External status page: `https://status.synthetic.new` (not linked or auto-polled by CodexBar).
 - Details: `docs/synthetic.md`.
 
@@ -518,6 +528,7 @@ provider-specific cookie validation, endpoints, login detection, and error trans
 - Details: `docs/perplexity.md`.
 
 ## Xiaomi MiMo
+- Dedicated Token Plan API keys read quota from the selected mainland China or Singapore endpoint on macOS and Linux.
 - Browser cookies from automatic import or manual `Cookie:` header for `platform.xiaomimimo.com` balance and token-plan endpoints.
 - Optional testing override via `MIMO_API_URL`; overrides must be HTTPS or bare hosts normalized to HTTPS, and invalid
   overrides fail closed instead of falling back to local MiMo usage accounting.
@@ -702,6 +713,7 @@ JavaScriptCore is the macOS rollback engine. The committed `.js` is generated fr
 - API key from config or `LITELLM_API_KEY`; base URL from config `enterpriseHost` or `LITELLM_BASE_URL`.
 - Reads `/key/info` first, then `/user/info?user_id=...` for user-bound keys or `/team/info?team_id=...` for team-only keys.
 - User-bound keys show personal budget usage as the primary window and the key's exact matching team as the secondary window.
+- When a team key has no personal budget, the primary window shows the team-member budget (the member's own, else the team default from `/team/info`) with the member's spend.
 - Team-only keys show the team budget as their sole usage window. Automatic menu-bar selection prefers the enforced team budget.
 - Spend remains visible in the API-spend row when LiteLLM has no budget limit configured.
 - Accepts base URLs with or without a `/v1` suffix; management requests are sent to the proxy root.
@@ -781,7 +793,10 @@ failures. Authentication failures and invalidated account scopes do not restore 
 
 ## Helmcode
 
-[Helmcode](helmcode.md) reads model quotas from a browser dashboard session for Helmcode Cloud or NaN Builders. Cloud is preferred when both tenants are signed in; Manual cookie source uses the selected tenant. Prepaid balance is Cloud-only.
+[Helmcode](helmcode.md) reads model quotas from a browser dashboard session for Helmcode Cloud or NaN Builders. A
+tenant that meters inference in credits reports its plan instead: one **Credits** window for the allowance, with each
+model's weight as detail. Cloud is preferred when both tenants are signed in; Manual cookie source uses the selected
+tenant. Prepaid balance is Cloud-only.
 
 ## GitKraken AI
 

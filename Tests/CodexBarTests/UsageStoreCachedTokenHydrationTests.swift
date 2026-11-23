@@ -232,9 +232,9 @@ struct UsageStoreCachedTokenHydrationTests {
             historyDays: 1,
             includePiSessions: false,
             scannerOptions: options)
-        var cache = CostUsageStoreAccess.read(cacheRoot: env.cacheRoot)
+        var cache = CostUsageStoreAccess.read(cacheRoot: env.cacheRoot, home: env.codexStoreHome)
         cache.lastScanUnixMs = Int64(now.addingTimeInterval(-2 * 60 * 60).timeIntervalSince1970 * 1000)
-        CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, cache: cache)
+        CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, home: env.codexStoreHome, cache: cache)
 
         let settings = Self.makeCodexOnlySettings(historyDays: 1)
         let store = UsageStore(
@@ -335,7 +335,7 @@ struct UsageStoreCachedTokenHydrationTests {
 
         let hydration = store.hydrateCachedTokenSnapshots()
         await gate.waitForStart()
-        store.publishConfirmedEmptyTokenSnapshot(for: .codex)
+        store.publishTokenSnapshot(nil, for: .codex)
         let confirmedEmptyRevision = store.tokenSnapshotPublicationRevision(for: .codex)
         await gate.release()
         await hydration?.value

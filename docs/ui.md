@@ -9,15 +9,20 @@ read_when:
 
 ## Settings
 
+Closing Settings releases its hosted panes so hidden content stops reacting to updates. Reopening restores the window frame, selected pane, and in-session Back/Forward history; Usage & Spend keeps its shared data and reporting-period selection. The pane views are rebuilt when reopened.
+
+Settings selectors use native popup controls in official builds. Imported custom values, such as three work days, stay visible alongside the preset choices.
+
 On macOS 26 and later, Settings uses the system split-view sidebar, toolbar, search, and scroll-edge effects. The native sidebar toggle and divider can hide or restore the sidebar; its saved width is preserved. The detail scroll view and frosted toolbar backing fill the available column even in wide windows. Earlier macOS versions keep the existing sidebar, titlebar layout, and detail reading-width cap.
+On macOS 26 and later, Settings uses the system split-view sidebar, toolbar, search, and scroll-edge effects. The native sidebar toggle and divider can hide or restore the sidebar; its saved width is preserved. Provider sorting controls hide with the sidebar and return when it reopens. The detail scroll view and frosted toolbar backing fill the available column even in wide windows. Earlier macOS versions keep the existing sidebar, titlebar layout, and detail reading-width cap.
 
 - Back and Forward revisit the panes you opened, using Command-[ and Command-] as in System Settings. Selecting a new pane after going back clears forward history; reselecting the current pane preserves it. The last pane still restores at launch, while navigation history lasts only for the current app session. Hidden Debug panes are removed from history. On macOS 26 and later, the controls use the native toolbar; macOS 14/15 retain the native window title and show the controls above the pane content. The native window title stays set on every version for accessibility and the Window menu. About and Acknowledgements share this history. Opening About explicitly returns to its root; reopening Settings preserves the current destination during the session. Only the pane, not a subpage or history, restores after relaunch.
 - Dock presence follows startup and actual window transitions instead of rescanning windows on every app update. Scheduled Sparkle alerts still request temporary Dock presence, including alerts shown behind another app.
 - Menu → Highlight menu cards on hover is on by default. Turn it off to keep normal text and usage-bar colors on provider cards, Overview cards, and Refresh while hovering. Keyboard selection stays visible; clicks and submenus are unchanged. The choice persists locally across restarts.
 - The provider sidebar keeps saved order and the one-click alphabetical toggle (enabled first). The adjacent
   menu offers Only show enabled providers and Restore default order. Restore is disabled when the saved order
-  is already the default and alphabetical sorting is off. Search matches service names, provider IDs,
-  CLI names, and CLI aliases, ignoring case and accents.
+  is already the default and alphabetical sorting is off. Search matches Settings pane titles, service names, provider IDs,
+  CLI names, and CLI aliases, ignoring case and accents. Individual settings controls are not indexed.
 - Browsing filters do not rewrite provider configuration or menu bar order. Dragging is available only in the
   unfiltered saved-order view and retains hidden plugin positions. Restore default order resets built-in service
   positions to the catalog order, preserving provider configuration and plugins. Undo (also available through
@@ -35,7 +40,7 @@ On macOS 26 and later, Settings uses the system split-view sidebar, toolbar, sea
 - Provider accent colors use a hex field and a color picker that also previews the selected color; Reset restores the provider default.
 - General → Default terminal supports installed Terminal, iTerm, Ghostty, and stable Warp. Terminal is the default and fallback. Warp launches target its app directly and use owner-only temporary tab configs, removed after one minute; interrupted-launch leftovers are cleaned on the next app start.
 - Provider → Visible usage items includes titled provider detail sections. Choices persist across language changes and apply to provider cards and Overview. Untitled details remain visible; cost-summary sections stay controlled by their existing display setting.
-- The empty SwiftUI Settings placeholder is dismissed once per presentation, on the next main-queue turn after AppKit finishes ordering it onscreen. Retained hidden windows are left alone; the real Settings window remains reusable.
+- The empty SwiftUI Settings placeholder is dismissed once per presentation, on the next main-queue turn after AppKit finishes ordering it onscreen. Retained hidden windows are left alone; the real Settings window is reused while it remains open.
 - The placeholder never promotes the app to a Dock application or keeps it there. This avoids the launch-time Dock icon on macOS 27 when AppKit accepts promotion but refuses to restore accessory policy. Real Settings and update dialogs still request temporary Dock presence; the OS can still refuse demotion after those dialogs close.
 - Usage & Spend heatmap tooltips prefer the space above the hovered cell and stay within the grid, falling below when needed. On narrow grids they compact vertically and may overlap cells; keyboard selection remains available in the daily grid.
 - Token activity uses appearance-aware colors, brighter high-usage cells in Dark mode, and a slashed outline for unavailable history. The continuous annual grid keeps day cells at least 10 points wide with 3-point gaps; narrow cards scroll horizontally from the recent end and show labeled controls for earlier and more recent activity. The controls page with overlapping weeks, disable at each end, and disappear when the year fits. Month labels scroll with the grid, keyboard navigation reveals the active date, and tooltips stay inside the visible viewport.
@@ -48,10 +53,15 @@ On macOS 26 and later, Settings uses the system split-view sidebar, toolbar, sea
 
 ## Menu bar
 
+After a quota refresh fails, retained usage bars use a neutral tint until recovery, even with an account subtitle override. Successful fallback diagnostics and account-switch failures with successfully refreshed quotas keep the provider color. Current exhausted quota measurements also keep their tint; a limit notice alone does not mark them stale. Code Review follows its own dashboard refresh outcome; separately refreshed monthly credit meters, supplemental costs, and charts keep their own color.
+Menu-card percentages, reset countdowns, and cost/credit values use tabular digits, keeping equal-length numeric updates steady. Titles, hints, and errors keep proportional typography.
+Cached cards suspend live value resolution after the last menu closes and resume with current values when reopened. Closing a submenu while its parent remains open keeps the parent card live.
+
 Stacked rows with leading window labels align their values and meters after the widest label. Rows that begin with names, explicit spaces, or inline icons retain their natural spacing; hiding percentage window labels is unchanged.
-- Provider cards with both live throughput and daily history use a fixed-height Live · Spend chart switch; Live is the default, and the choice is remembered locally per provider instance.
+- Provider cards with both live throughput and daily history use a fixed-height Live · Spend chart switch; Live is the default, and the choice is remembered locally per provider instance. Only the selected chart is built; switching preserves the card height, hover details, and optional live-limit row space.
 - About CodexBar includes the running version. When the updater is available, the menu offers Check for Updates… or the existing staged-update action.
 - Overview offers Share Usage Snapshot when its Usage & Spend summary has shareable data. The local preview uses the same spend sources, hidden-source choices, calendar, and currency as that summary; Copy Image exports PNG and TIFF without uploading anything.
+- Closing Share Usage Snapshot releases its preview views; reopening builds a fresh preview in the reusable window.
 - Shared cards and copied statistics keep model families from providers with complete model history, even when another provider in the same currency has unpriced or incomplete history. A ranking that omits providers or model rows is labeled **PARTIAL** on the image and **Top models (partial)** in copied text; complete rankings retain **BY USAGE**. Selected-day model rows are omitted because the shared totals describe the full reporting window.
 - LSUIElement app: no Dock icon; status item uses custom NSImage.
 - Cached status menus and previously opened submenus follow macOS appearance changes before reopening, preserving the effective Light/Dark and accessibility appearance.
@@ -79,8 +89,9 @@ Stacked rows with leading window labels align their values and meters after the 
   per provider. Manual edits select the Custom preset.
 - To hide Session, Weekly, Scoped weekly, and automatic window prefixes (such as `5h` and `W`), turn off **Show window labels**
   next to **Monospaced digits**. It defaults on and applies to all layouts. Auto percentage, pace, and reset tokens identify
-  their selected window when multiple quotas are available and the selection is unambiguous. Each token keeps its own
-  label, including separate rows and the reset branch of **Auto % / Resets in**. Monthly and named allowances reuse their
+  their selected window when multiple quotas are available and the selection is unambiguous. A row names that window
+  once (`5h 0% –`, not `5h 0% 5h –`); separate rows, tokens after a different window, and the reset branch of
+  **Auto % / Resets in** keep their own label. Monthly and named allowances reuse their
   existing labels; single-window and balance output stays bare. Full window names remain in VoiceOver descriptions.
   Explicit named provider lanes, named allowances, Spend currency symbols, and progress-bar labels remain visible.
   The preference is stored separately as `menuBarLayoutShowWindowLabels`; saved layouts and V5/V6 projections are unchanged.
@@ -94,6 +105,8 @@ Stacked rows with leading window labels align their values and meters after the 
   Pro/Flash quotas, not these Antigravity family allowances; it does not synthesize a weekly quota.
 - Layout palette chips use their natural label widths and wrap into rows instead of squeezing longer token names into equal-width columns.
 - Time tokens offer Session and Weekly variants of Resets in and Reset at, including in conditional branches.
+  Hidden conditional reset tokens do not schedule display refreshes. Clock-based conditions still schedule their
+  own updates so the reset appears when its condition changes.
   The original unqualified reset tokens continue to follow the automatic window. A selected window that is
   unavailable displays a dash rather than substituting another window. Cursor also exposes **Grok Bot %**
   while its named allowance is available; a saved token shows its label and a dash when unavailable. Saved layouts use V4 keys
@@ -124,7 +137,7 @@ Stacked rows with leading window labels align their values and meters after the 
 | Usage | Session pace, Weekly pace, Auto pace, Spend pace | Signed pace delta for that window |
 | Time | Resets in, Reset at (automatic, Session, Weekly, Spend), Runs out | Selected-window relative reset, absolute reset, or pace estimate |
 | Money | Balance, Cost today, Cost (History window), Spend, Spend / budget | Provider balance or remaining credits, or local cost estimate. Cost (History window) is the total for the selected [History window](cost-reporting-periods.md), and cost thresholds compare that window's total. Spend and Spend / budget show the provider-reported amount spent, alone or against its budget |
-| Structure | Separator dot, Space, Line break | Spacing and optional two-line composition |
+| Structure | Separator dot, eight more separator glyphs (`\|`, `/`, `-`, `•`, `◆`, `◇`, `~`, `‖`), Space, Line break | Spacing and optional two-line composition. Each separator is a single visible glyph |
 
 Spend items use the provider-reported budget behind the Extra usage metric and honor **Show optional credits,
 spending & billing details**. They do not use prepaid balances or local cost estimates. Spend % carries the budget's
@@ -132,9 +145,10 @@ currency symbol; credit-denominated caps have no currency prefix and no monetary
 reported period and becomes available after 1% of that period. Existing layouts are unchanged; new installs also
 include a **Spend over 90% used** conditional rule.
 
-Spend layouts, overrides, and rules are stored in V6. Older builds read a V5 projection without Spend tokens or rules;
-V4 and earlier projections retain their existing compatibility behavior. Returning restores the full layout when the
-older copy was unchanged. Edits in an older build take precedence, while untouched overrides and Spend rules survive;
+Layouts, overrides, and rules are stored in V7. A build that reads V6 gets a projection that maps each extra separator
+glyph to the separator dot, so the layout stays visible there. Older builds read a V5 projection without Spend tokens
+or rules; V4 and earlier projections retain their existing compatibility behavior. Returning restores the full layout
+when the older copy was unchanged. Edits in an older build take precedence, while untouched overrides and Spend rules survive;
 clearing the older rule library deliberately clears all rules.
 
 The pace tokens render the same delta the menu card shows as "in deficit"/"in reserve", in the compact signed form the
@@ -151,14 +165,16 @@ tokens, including conditional layouts, and both live and sample layout previews.
 pace stays an en dash. The menu card's reserve/deficit wording and the numeric meaning of saved conditional rules
 do not change: positive pace thresholds still mean usage ahead of pace.
 
-Enable **Color Pace Indicator** under **Menu Bar → Icon** to show usage behind pace (reserve) in green and usage ahead
-of pace (risk of running out early) in red. The option defaults off, applies to all four pace tokens and the layout
-preview, and keeps the signed percentages. Zero and unavailable pace stay neutral; stale pace colors are dimmed unless high-contrast rendering is active.
-It colors **Session pace**, **Weekly pace**, **Auto pace**, and **Spend pace** in the layout editor. Enabling it does not add tokens,
-rewrite stored layouts, or migrate legacy display modes. Existing installs stay monochrome until the option is enabled.
+Enable **Color Pace Indicator** under **Menu Bar → Icon** to show a green bar for usage behind pace (reserve) and a red bar
+for usage ahead of pace (risk of running out early). Signed percentages keep their neutral text color, and the bars scale
+with the font. The option defaults on and applies to all four pace tokens and the layout preview.
+Zero pace uses a neutral bar; unavailable pace stays a plain dash.
+Stale pace colors are dimmed unless high-contrast rendering is active.
+It applies to **Session pace**, **Weekly pace**, **Auto pace**, and **Spend pace** in the layout editor. Enabling it does not add tokens,
+rewrite stored layouts or migrate legacy display modes. Saved on/off choices are preserved; state bars are enabled when no choice has been saved.
 These colors keep the same meaning with either pace sign: reserve is green and deficit is red.
 
-Enable **Color by provider** under **Menu Bar → Icon** to tint each provider slot with its accent color, including custom accents. This single toggle defaults off and works with Critters, Meter bars, and Icon & percent, including stacked provider rows; it never changes the saved layout or the Brand/Monochrome artwork used in Usage & Spend. Pace tokens keep their independent green/red colors and VoiceOver keeps the same spoken labels.
+Enable **Color by provider** under **Menu Bar → Icon** to tint each provider slot with its accent color, including custom accents. This single toggle defaults off and works with Critters, Meter bars, and Icon & percent, including stacked provider rows; it never changes the saved layout or the Brand/Monochrome artwork used in Usage & Spend. Pace indicators keep their independent green/red colors and VoiceOver keeps the same spoken labels.
 
 Provider color falls back to monochrome while a menu is open, data is stale, system Increase Contrast is enabled, or the inactive-display contrast option is enabled. Color returns immediately when the menu closes. Accents must meet a 2:1 contrast threshold against conservative reference backgrounds (25% sRGB gray in dark appearance, 85% in light appearance); this is not a WCAG text-conformance claim or wallpaper sampling. Unsupported or low-contrast accents use the system template rendering. The layout preview follows its own light/dark and accessibility environment.
 
@@ -190,6 +206,7 @@ model-generic token label while the rendered menu-bar prefix and accessibility l
 - Renderer/critter icons dim when last refresh failed and can render incident indicators; brand display mode uses provider branding plus title text.
 - Loading animation runs at a bounded frame rate and has a hard continuous-duration ceiling so provider hangs cannot keep
   the menu bar redrawing forever.
+  An idle loading driver does not reapply icons that have already been updated.
 - Ordinary, fresh monochrome token layouts use template images so AppKit supplies native highlighting and
   inactive-display dimming. Combined stacked rows support inline monochrome icons, percentages, and reset text.
   Individual layout content and appearance remain in the bounded renderer cache; memory-pressure cleanup clears it.
@@ -204,6 +221,8 @@ model-generic token label while the rendered menu-bar prefix and accessibility l
   tertiary, and extra windows render when the provider snapshot has data for them.
 - Manual refresh updates the open card subtitle and persistent Refresh-row spinner in place. Repeated clicks share the
   active request, and the existing row geometry remains fixed through success or failure.
+  Idle rows skip provider-selection resolution until a refresh is active; Overview and provider-specific busy rules
+  remain unchanged.
 - Provider errors use up to three red lines, with inline backtick-delimited commands rendered in monospace and the copy control aligned to the first line. Copy preserves the original error text. Stale Claude usage has a separate, single-line secondary notice; Settings error previews retain the notice with the error.
 - Live pace and metric detail text use the full row width. Updates that exceed the space reserved when the menu opened
   show a trailing ellipsis; reopening the menu measures the updated text again.
@@ -241,6 +260,8 @@ follows the existing pace visibility setting. Unknown usage, missing resets, and
 target. This is a budget for the remaining period, not a measurement of today's usage or an alert threshold.
 
 The **Work days** setting selects the weekly pace model. **Automatic** uses Codex historical pace when enough data is available. Historical daily credits follow local calendar-day boundaries, including midnight daylight-saving transitions. Selecting 4, 5, 6, or 7 days uses that explicit schedule for pace and ETA instead; CodexBar continues collecting history in the background, but does not use historical predictions until the setting returns to Automatic. Six days counts Monday through Saturday and excludes Sunday, including in the session forecast's remaining capacity.
+
+Explicit workday schedules and daily totals in quota windows also follow actual local day boundaries when daylight saving skips midnight.
 
 - **On pace** – usage matches the expected rate.
 - **X% in deficit** – you're consuming faster than the even rate; at this pace you'll run out before the window resets.

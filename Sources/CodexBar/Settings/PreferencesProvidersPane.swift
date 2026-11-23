@@ -123,6 +123,9 @@ struct ProvidersPane: View {
                             Task { @MainActor in
                                 await self.addManagedCodexAccount()
                             }
+                        },
+                        renameAccount: { account, name in
+                            self.settings.renameCodexAccount(account, to: name)
                         })
                 }
             })
@@ -159,7 +162,7 @@ struct ProvidersPane: View {
         query: String,
         displayName: (UsageProvider) -> String) -> [UsageProvider]
     {
-        let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        let words = SettingsSearch.words(in: query)
         guard !words.isEmpty else { return providers }
         return providers.filter { provider in
             let descriptor = ProviderDescriptorRegistry.descriptor(for: provider)
@@ -169,9 +172,7 @@ struct ProvidersPane: View {
                 provider.rawValue,
                 descriptor.cli.name,
             ] + descriptor.cli.aliases
-            return words.allSatisfy { word in
-                fields.contains { $0.range(of: word, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
-            }
+            return SettingsSearch.matches(words: words, fields: fields)
         }
     }
 
@@ -267,7 +268,8 @@ struct ProvidersPane: View {
             isRemovingManagedAccount: self.managedCodexAccountCoordinator.isRemovingManagedAccount,
             isAuthenticatingLiveAccount: self.isAuthenticatingLiveCodexAccount,
             isPromotingSystemAccount: self.codexAccountPromotionCoordinator.isPromotingSystemAccount,
-            notice: self.codexAccountsNotice ?? degradedNotice)
+            notice: self.codexAccountsNotice ?? degradedNotice,
+            hidePersonalInfo: self.settings.hidePersonalInfo)
     }
 
     func selectCodexVisibleAccount(id: String) async {

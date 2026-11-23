@@ -83,6 +83,7 @@ test("credential prefixes and environment names remain literal while prose can t
     ["Use org-... / org_...", "Use organización-... / org_..."],
     ["ory_session_…=…; csrftoken=…", "ory_sessie_…=…; csrftoken=…"],
     ["Set PROJECT_ID", "Set ID_PROXECTO"],
+    ["Use user_read permission", "Utilisez la permission lecture_utilisateur"],
     ["Run `firectl whoami`", "Exécutez `firectl qui`"],
   ]) {
     assert.notEqual(protectedLiteralErrors("fixture", translated, english).length, 0, english);
@@ -99,4 +100,27 @@ test("plural template reordering preserves variable positions", () => {
   assert.notEqual(pluralCatalogErrors(reordered, reference).length, 0);
   reordered.sample.NSStringLocalizedFormatKey = "%2$#@until@ %1$#@count@";
   assert.deepEqual(pluralCatalogErrors(reordered, reference), []);
+});
+
+test("plural positions include preceding ordinary format arguments", () => {
+  for (const [original, translated] of [
+    ["%@ has %#@count@", "%2$#@count@ for %1$@"],
+    ["%d: %#@count@", "%2$#@count@ (%1$d)"],
+    ["%*.*f: %#@count@", "%4$#@count@ (%3$*1$.*2$f)"],
+    ["%%: %@ has %#@count@", "%2$#@count@ for %1$@ (%%)"],
+  ]) {
+    const reference = structuredClone(plural);
+    reference.sample.NSStringLocalizedFormatKey = original;
+    const reordered = structuredClone(reference);
+    reordered.sample.NSStringLocalizedFormatKey = translated;
+    assert.deepEqual(pluralCatalogErrors(reordered, reference), [], original);
+  }
+});
+
+test("plural variables cannot take the position of an ordinary argument with the same type", () => {
+  const reference = structuredClone(plural);
+  reference.sample.NSStringLocalizedFormatKey = "%d: %#@count@";
+  const swapped = structuredClone(reference);
+  swapped.sample.NSStringLocalizedFormatKey = "%1$#@count@ (%2$d)";
+  assert.notEqual(pluralCatalogErrors(swapped, reference).length, 0);
 });

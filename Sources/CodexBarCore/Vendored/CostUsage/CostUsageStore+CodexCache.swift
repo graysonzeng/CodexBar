@@ -41,23 +41,16 @@ extension CostUsageStore {
     /// Decodes usage rows as SQLite returns them, so raw payloads never accumulate alongside decoded rows.
     static func readDecodedCodexUsageRows(
         _ database: OpaquePointer,
-        files: [CostUsageStoreFile],
+        home: String,
         recorder: CostUsageStoreReadWorkRecorder?) throws -> DecodedCodexUsageRows
     {
         var decoded = DecodedCodexUsageRows()
         let decoder = JSONDecoder()
         let rowStrings = CostUsageRowStringPool()
-        let readablePaths = Set(files.compactMap { file -> String? in
-            guard let data = file.scanState.detailsPayload,
-                  (try? decoder.decode(StoredFileDetails.self, from: data)) != nil
-            else { return nil }
-            return file.path
-        })
         var decodeAttempts = 0
         defer { recorder?.recordUsageRowDecodes(count: decodeAttempts) }
-        try self.forEachUsageRow(database, path: nil, recorder: recorder, nativeOnly: true) { stored in
+        try self.forEachUsageRow(database, path: nil, home: home, recorder: recorder, nativeOnly: true) { stored in
             decoded.rowCounts[stored.path, default: 0] += 1
-            guard readablePaths.contains(stored.path) else { return }
             decodeAttempts += 1
             if var row = try? decoder.decode(CostUsageScanner.CodexUsageRow.self, from: stored.payload) {
                 row.turnID = row.turnID.map(rowStrings.intern)
@@ -97,7 +90,8 @@ extension CostUsageStore {
                 maxFileBytes: fileBudgetBytes,
                 requestedSinceDay: budgetProtectionWindow.sinceKey,
                 requestedUntilDay: budgetProtectionWindow.untilKey,
-                calendar: calendar)
+                calendar: calendar,
+                forceCheckpoint: false)
             guard !result.catchUpRequired else { return result }
             self.codexSavePreLockCheckpoint()
             guard self.beginSaveTransaction() else { return Self.rescanRequired(result) }
@@ -164,7 +158,10 @@ extension CostUsageStore {
             let after = Self.globalAggregates(cache: cache, recorder: self.scopedReadWorkRecorderForTesting)
             guard self.withDatabase(default: false, { database in
                 if before != after {
-                    try Self.mergeDayAggregatesIn(database, deltas: before.map(Self.negatedAggregate) + after)
+                    try Self.mergeDayAggregatesIn(
+                        database,
+                        deltas: before.map(Self.negatedAggregate) + after,
+                        home: self.home)
                 }
                 return true
             }) else {
@@ -231,9 +228,8 @@ extension CostUsageStore {
     {
         var restored = Self.reconciledCodexCache(baseline.decoded, persistence: baseline.persistence)
         guard restored.timeZoneIdentifier == nil
-            || restored.timeZoneIdentifier == calendar.timeZone.identifier
-        else { return false }
-        guard (cache.codexScanCatchUpPending ?? false) == restored.codexScanCatchUpPending
+            || restored.timeZoneIdentifier == calendar.timeZone.identifier,
+            (cache.codexScanCatchUpPending ?? false) == restored.codexScanCatchUpPending
         else { return false }
         // Freshness and the sqlite cursor are ignored semantic fields. The time zone is a
         // persistence-derived spelling: metadata(cache:calendar:) always writes the caller's
@@ -241,7 +237,6 @@ extension CostUsageStore {
         restored.lastScanUnixMs = cache.lastScanUnixMs
         restored.timeZoneIdentifier = calendar.timeZone.identifier
         restored.codexScanCatchUpPending = cache.codexScanCatchUpPending
-        restored.files = restored.files.mapValues(Self.normalizingScanComplete)
         var incoming = cache
         incoming.timeZoneIdentifier = calendar.timeZone.identifier
         incoming.files = incoming.files.mapValues(Self.normalizingScanComplete)
@@ -289,6 +284,9 @@ extension CostUsageStore {
     }
 
     private static func normalizingScanComplete(_ usage: CostUsageFileUsage) -> CostUsageFileUsage {
+        #if DEBUG
+        CostUsageStoreTestHooks.current.codexScanCompleteNormalizationVisit?()
+        #endif
         var usage = usage
         usage.codexScanComplete = usage.codexScanComplete ?? true
         return usage
@@ -457,9 +455,10 @@ extension CostUsageStore {
             // Codex JSONL — they restore through the adapter's own checkpoint payload,
             // never through the Codex details/resume decoders.
             guard !file.belongsToOpenCodeLocalHistory,
-                  let detailsData = file.scanState.detailsPayload,
-                  let details = try? decoder.decode(StoredFileDetails.self, from: detailsData)
+                  let detailsData = file.scanState.detailsPayload
             else { continue }
+            recorder?.recordFileDetailsDecode()
+            guard let details = try? decoder.decode(StoredFileDetails.self, from: detailsData) else { continue }
             let aggregates = (aggregatesByPath[file.path] ?? []).map(\.aggregate)
             let rows: [CostUsageScanner.CodexUsageRow]
             if let decodedUsageRows {
@@ -577,6 +576,12 @@ extension CostUsageStore {
 
         for file in persistence.files where !file.belongsToOpenCodeLocalHistory {
             guard var usage = cache.files[file.path] else { continue }
+            let archived: Bool? = CostUsageScanner.isArchivedCodexRollout(file.path) ? true : nil
+            if usage.codexArchived != archived {
+                usage.codexArchived = archived
+                cache.files[file.path] = usage
+            }
+            if archived == true { continue }
             let normalizedIdentity = Self.normalizedCodexFileIdentity(
                 file: file,
                 currentRootDevices: currentRootDevices)
@@ -751,15 +756,11 @@ extension CostUsageStore {
                 let metadata = CostUsageScanner.codexFileMetadata(fileURL: fileURL)
                 guard let fileId = metadata.fileId,
                       let cachedEntry = Self.cachedCodexUsageEntry(for: path, cache: cache),
-                      !cachedEntry.usage.hasPendingCodexScanWork
-                else {
-                    continue
-                }
-
-                guard Self.matchesCompletedCodexFileSnapshot(
-                    usage: cachedEntry.usage,
-                    metadata: metadata,
-                    fileURL: fileURL)
+                      !cachedEntry.usage.hasPendingCodexScanWork,
+                      Self.matchesCompletedCodexFileSnapshot(
+                          usage: cachedEntry.usage,
+                          metadata: metadata,
+                          fileURL: fileURL)
                 else {
                     continue
                 }
@@ -802,11 +803,10 @@ extension CostUsageStore {
         let expectedTotalFiles = max(0, cache.codexScanTotalFiles ?? 0)
         let reconciliationLimit = CostUsageScanner.codexCatchUpScanCandidateLimit
         guard expectedTotalFiles <= reconciliationLimit,
-              (cache.codexScanInventoryPaths?.count ?? 0) <= reconciliationLimit
-        else { return }
-        guard let completedInventory = Self.completedCodexScanInventory(
-            cache: cache,
-            expectedTotalFiles: expectedTotalFiles)
+              (cache.codexScanInventoryPaths?.count ?? 0) <= reconciliationLimit,
+              let completedInventory = Self.completedCodexScanInventory(
+                  cache: cache,
+                  expectedTotalFiles: expectedTotalFiles)
         else { return }
 
         cache.codexScanCatchUpPending = false
@@ -920,8 +920,11 @@ extension CostUsageStore {
         let tokenSnapshotsLoaded = baseline.tokenSnapshotsLoaded || parserStateChanged
         let sourceSnapshots = usage.codexTokenSnapshots ?? []
         let sourceRows = usage.codexRows ?? []
+        // Archive state is filesystem-derived, not persisted; compare it at the same baseline.
+        var persistedUsage = usage
+        persistedUsage.codexArchived = baseline.usage?.codexArchived
         // The caller revalidates this baseline under the transaction's writer lock.
-        if canReuseRows, baseline.usage == usage,
+        if canReuseRows, baseline.usage == persistedUsage,
            sourceRows.count == baseline.rowCount,
            !tokenSnapshotsLoaded || sourceSnapshots.count == baseline.snapshotCount
         {
@@ -1031,9 +1034,9 @@ extension CostUsageStore {
             path: path,
             eventCount: tokenSnapshotsLoaded ? sourceSnapshots.count : baseline.snapshotCount,
             nextUsageRowIndex: usage.codexNextUsageRowIndex ?? CostUsageScanner.nextCodexUsageRowIndex(usage.codexRows),
-            countedTotals: Self.totals(usage.lastCountedTotals),
-            rawTotalsBaseline: Self.totals(usage.lastRawTotalsBaseline),
-            rawTotalsWatermark: Self.totals(usage.lastRawTotalsWatermark),
+            countedTotals: usage.lastCountedTotals.map(Self.totals),
+            rawTotalsBaseline: usage.lastRawTotalsBaseline.map(Self.totals),
+            rawTotalsWatermark: usage.lastRawTotalsWatermark.map(Self.totals),
             sawDivergentTotals: usage.hasDivergentTotals ?? false,
             sawInterleavedTotals: usage.hasInterleavedTotals ?? false,
             seenRawTotals: (usage.seenRawTotals ?? []).map(Self.totals),
@@ -1120,13 +1123,20 @@ extension CostUsageStore {
             aggregate.requestCount += 1
             let isPriority = row.pricingMode == "priority"
             let total = Int64(max(0, row.input) + max(0, row.output))
-            if isPriority {
+            let isUltrafast = row.pricingMode == "ultrafast"
+            if isUltrafast {
+                aggregate.ultrafastTokens += total
+            } else if isPriority {
                 aggregate.priorityTokens += total
             } else {
                 aggregate.standardTokens += total
             }
             if let cost = row.knownCostNanos {
                 aggregate.authoritativeCostNanos += cost
+            } else if isUltrafast {
+                aggregate.ultrafastInputTokens += Int64(row.input)
+                aggregate.ultrafastCachedTokens += Int64(row.cached)
+                aggregate.ultrafastOutputTokens += Int64(row.output)
             } else if isPriority {
                 aggregate.priorityInputTokens += Int64(row.input)
                 aggregate.priorityCachedTokens += Int64(row.cached)
@@ -1178,6 +1188,10 @@ extension CostUsageStore {
                 value.priorityOutputTokens += aggregate.priorityOutputTokens
                 value.standardTokens += aggregate.standardTokens
                 value.priorityTokens += aggregate.priorityTokens
+                value.ultrafastInputTokens += aggregate.ultrafastInputTokens
+                value.ultrafastCachedTokens += aggregate.ultrafastCachedTokens
+                value.ultrafastOutputTokens += aggregate.ultrafastOutputTokens
+                value.ultrafastTokens += aggregate.ultrafastTokens
                 values[key] = value
             }
         }
@@ -1222,6 +1236,11 @@ extension CostUsageStore {
                 cached: aggregate.priorityCachedTokens,
                 output: aggregate.priorityOutputTokens,
                 mode: "priority")
+            append(
+                input: aggregate.ultrafastInputTokens,
+                cached: aggregate.ultrafastCachedTokens,
+                output: aggregate.ultrafastOutputTokens,
+                mode: "ultrafast")
             if aggregate.authoritativeCostNanos != 0 {
                 rows.append(CostUsageScanner.CodexUsageRow(
                     day: aggregate.day,
@@ -1335,8 +1354,8 @@ extension CostUsageStore {
             timestamp: snapshot.timestamp,
             timestampUnixMs: date.map { Int64($0.timeIntervalSince1970 * 1000) },
             day: date.map { CostUsageScanner.CostUsageDayRange.dayKey(from: $0, calendar: calendar) },
-            last: Self.totals(snapshot.last),
-            total: Self.totals(snapshot.total),
+            last: snapshot.last.map(Self.totals),
+            total: snapshot.total.map(Self.totals),
             endOffset: snapshot.endOffset)
     }
 
@@ -1406,10 +1425,6 @@ extension CostUsageStore {
         identity?.split(separator: ":", maxSplits: 1).first.map(String.init)
     }
 
-    private static func totals(_ value: CostUsageCodexTotals?) -> CostUsageStoreTotals? {
-        value.map(self.totals)
-    }
-
     private static func totals(_ value: CostUsageCodexTotals) -> CostUsageStoreTotals {
         CostUsageStoreTotals(
             input: Int64(value.input),
@@ -1447,21 +1462,23 @@ struct CostUsageStoreLoad: @unchecked Sendable {
 enum CostUsageStoreAccess {
     private final class SharedStoreRegistry: @unchecked Sendable {
         private let lock = NSLock()
-        private var entries: [(path: String, store: CostUsageStore)] = []
+        private var entries: [(path: String, home: String, store: CostUsageStore)] = []
         /// The app normally owns one cache root. Keep a small bound for managed/test roots so
         /// decoded scan/read state and idle SQLite connections cannot grow with every path seen.
         private let capacity = 4
 
-        func store(cacheRoot: URL?) -> CostUsageStore {
-            let candidate = CostUsageStore(cacheRoot: cacheRoot)
+        func store(cacheRoot: URL?, home: String) -> CostUsageStore {
+            let candidate = CostUsageStore(cacheRoot: cacheRoot, home: home)
             let key = candidate.databaseURL.standardizedFileURL.path
             return self.lock.withLock {
-                let store: CostUsageStore = if let index = self.entries.firstIndex(where: { $0.path == key }) {
+                let store: CostUsageStore = if let index = self.entries
+                    .firstIndex(where: { $0.path == key && $0.home == home })
+                {
                     self.entries.remove(at: index).store
                 } else {
                     candidate
                 }
-                self.entries.append((key, store))
+                self.entries.append((key, home, store))
                 if self.entries.count > self.capacity { self.entries.removeFirst() }
                 return store
             }
@@ -1474,11 +1491,12 @@ enum CostUsageStoreAccess {
 
     static func readView(
         cacheRoot: URL?,
+        home: String = CodexHomeCostStoreScope.key(),
         calendar: Calendar,
         purpose: CostUsageStoreReadPurpose,
         sourceScope: OpenCodeLocalHistoryAdapter.ReadScope? = nil) -> CostUsageStoreReadView
     {
-        self.sharedReadStores.store(cacheRoot: cacheRoot)
+        self.sharedReadStores.store(cacheRoot: cacheRoot, home: home)
             .syncLoadCodexReadView(calendar: calendar, purpose: purpose, sourceScope: sourceScope)
     }
 
@@ -1486,28 +1504,43 @@ enum CostUsageStoreAccess {
     /// same persistence owner (e.g. the OpenCode local history adapter, #4752). Do not
     /// construct a separate store against the same database: this registry is the writer.
     static func sharedScanStore(cacheRoot: URL?) -> CostUsageStore {
-        self.sharedScanStores.store(cacheRoot: cacheRoot)
+        self.sharedScanStores.store(cacheRoot: cacheRoot, home: CodexHomeCostStoreScope.key())
     }
 
-    static func load(cacheRoot: URL?, calendar: Calendar) -> CostUsageStoreLoad {
+    static func load(
+        cacheRoot: URL?,
+        home: String = CodexHomeCostStoreScope.key(),
+        calendar: Calendar) -> CostUsageStoreLoad
+    {
         #if DEBUG
         if let store = CostUsageStoreTestHooks.current.scanStoreOverride,
-           store.databaseURL == CostUsageStore(cacheRoot: cacheRoot).databaseURL
+           store.databaseURL == CostUsageStore.databaseURL(cacheRoot: cacheRoot),
+           store.home == home
         {
             return store.syncLoadCodexScan(calendar: calendar)
         }
         #endif
-        return self.sharedScanStores.store(cacheRoot: cacheRoot).syncLoadCodexScan(calendar: calendar)
+        return self.sharedScanStores.store(cacheRoot: cacheRoot, home: home).syncLoadCodexScan(calendar: calendar)
     }
 
-    static func read(cacheRoot: URL?, calendar: Calendar = .current) -> CostUsageCache {
-        CostUsageStore(cacheRoot: cacheRoot).syncLoadCodexCache(calendar: calendar)
+    static func read(
+        cacheRoot: URL?,
+        home: String = CodexHomeCostStoreScope.key(),
+        calendar: Calendar = .current) -> CostUsageCache
+    {
+        CostUsageStore(cacheRoot: cacheRoot, home: home).syncLoadCodexCache(calendar: calendar)
     }
 
     /// Cache read for callers whose work is row pricing and daily aggregates. Skipping the token
     /// snapshot table keeps large local histories from being materialized in full.
-    static func readWithoutTokenSnapshots(cacheRoot: URL?, calendar: Calendar = .current) -> CostUsageCache {
-        CostUsageStore(cacheRoot: cacheRoot).syncLoadCodexCache(calendar: calendar, loadTokenSnapshots: false)
+    static func readWithoutTokenSnapshots(
+        cacheRoot: URL?,
+        home: String = CodexHomeCostStoreScope.key(),
+        calendar: Calendar = .current) -> CostUsageCache
+    {
+        CostUsageStore(cacheRoot: cacheRoot, home: home).syncLoadCodexCache(
+            calendar: calendar,
+            loadTokenSnapshots: false)
     }
 
     /// Test and maintenance mutation seam for metadata-only edits. Scanner writes should keep
@@ -1515,10 +1548,11 @@ enum CostUsageStoreAccess {
     @discardableResult
     static func replace(
         cacheRoot: URL?,
+        home: String = CodexHomeCostStoreScope.key(),
         cache: CostUsageCache,
         calendar: Calendar = .current) -> CostUsageStoreBudgetResult
     {
-        let loaded = self.load(cacheRoot: cacheRoot, calendar: calendar)
+        let loaded = self.load(cacheRoot: cacheRoot, home: home, calendar: calendar)
         defer { loaded.release() }
         let since = cache.scanSinceKey ?? "0000-01-01"
         let until = cache.scanUntilKey ?? "9999-12-31"

@@ -10,7 +10,7 @@ struct PluginCookieProviderSpecTests {
     func `automatic cookie guidance names the provider browser policy and manual alternative`() throws {
         let fixture = try ProviderSettingsDescriptorTests().makeSettingsFixture(suite: #function)
         fixture.settings.debugDisableKeychainAccess = false
-        for provider in [UsageProvider.museai, .raycast, .perplexity, .parallel] {
+        for provider in [UsageProvider.museai, .raycast, .perplexity, .parallel, .opendesign] {
             let implementation = try #require(ProviderCatalog.implementation(for: provider))
             let picker = try #require(implementation.settingsPickers(
                 context: fixture.settingsContext(provider: provider)).first)
@@ -20,7 +20,7 @@ struct PluginCookieProviderSpecTests {
             #expect(picker.dynamicSubtitle?()?.contains("Supported browsers: \(names).") == true)
             if provider == .museai {
                 #expect(picker.subtitle.hasPrefix("Automatic imports browser cookies."))
-                for name in ["Aside", "Opera", "Opera Neon"] {
+                for name in ["Aside", "Brave Origin", "Opera", "Opera Neon"] {
                     #expect(browsers.map(\.displayName).contains(name))
                 }
             }
@@ -29,7 +29,7 @@ struct PluginCookieProviderSpecTests {
 
     private static let providers: [UsageProvider] = [
         .helmcode, .hyper, .manus, .perplexity, .qoder, .raycast, .sakana, .t3chat, .lithosai, .workbuddy,
-        .claudeplatform,
+        .claudeplatform, .opendesign, .siliconflow, .googledeveloper,
     ]
 
     @Test
@@ -37,6 +37,7 @@ struct PluginCookieProviderSpecTests {
         let fixture = try ProviderSettingsDescriptorTests().makeSettingsFixture(suite: #function)
         fixture.settings.debugDisableKeychainAccess = false
         for provider in Self.providers {
+            fixture.settings.updateProviderConfig(provider: provider) { $0.source = .web }
             let implementation = try #require(ProviderCatalog.implementation(for: provider))
             let context = fixture.settingsContext(provider: provider)
             let field = try #require(implementation.settingsFields(context: context).first)
@@ -50,7 +51,8 @@ struct PluginCookieProviderSpecTests {
                 #expect(field.isVisible == nil)
                 continue
             }
-            let picker = try #require(implementation.settingsPickers(context: context).first)
+            let picker = try #require(implementation.settingsPickers(context: context)
+                .first { $0.title == "Cookie source" })
             let allowsOff = ![UsageProvider.qoder, .t3chat].contains(provider)
             #expect(picker.options.map(\.id) == (allowsOff ? ["auto", "manual", "off"] : ["auto", "manual"]))
             for mode in [ProviderCookieSource.auto, .manual, .off] {
@@ -61,7 +63,8 @@ struct PluginCookieProviderSpecTests {
             picker.binding.wrappedValue = "unknown"
             #expect(fixture.settings.providerConfig(for: provider)?.cookieSource == .auto)
             fixture.settings.debugDisableKeychainAccess = true
-            let disabled = try #require(implementation.settingsPickers(context: context).first)
+            let disabled = try #require(implementation.settingsPickers(context: context)
+                .first { $0.title == "Cookie source" })
             #expect(!disabled.options.contains { $0.id == "auto" })
             fixture.settings.debugDisableKeychainAccess = false
         }
@@ -96,7 +99,8 @@ struct PluginCookieProviderSpecTests {
             #expect(strategy.kind == (source == .web ? .web : .apiToken))
             #expect(await strategy.isAvailable(context))
         }
-        for provider in Self.providers where provider != .hyper {
+        // SiliconFlow keeps Auto/API on the configured key; SiliconFlowProviderTests covers its routing.
+        for provider in Self.providers where ![UsageProvider.hyper, .siliconflow].contains(provider) {
             #expect(ProviderDescriptorRegistry.descriptor(for: provider).fetchPlan.sourceModes == [.auto, .web])
         }
     }

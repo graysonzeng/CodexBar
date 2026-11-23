@@ -149,20 +149,25 @@ extension CodexBarCLI {
           Use --provider codex --remote <host> for separate local and SSH-host summaries.
           --summary-only emits versioned Codex JSON totals without account or session details.
           --identified-only requires --provider codex and JSON. It exports strong native request identities
-          over one UTC window (30 days by default); legacy and unidentified usage are excluded. Prices are unavailable.
-          Add --remote to deduplicate that export with one SSH host using the same millisecond window.
-          Both hosts need a CLI supporting --identified-only. Failures retain an explicitly partial local subtotal.
+          over one UTC window (30 days by default); legacy and unidentified usage are excluded.
+          Repeat --remote to deduplicate exports from several SSH hosts using the same millisecond window.
+          Every host needs schema 2 support. Combined API-price estimates use the collector’s pricing snapshot;
+          unknown prices remain null with unpricedRequestCount. Pricing disagreements retain tokens, unpriced;
+          timestamp/token conflicts exclude requests. Failed hosts retain successful sources and exit nonzero.
+          Source rows include local/ssh origin and collection time; failed rows omit that time.
           These modes accept --days 1...365, not --period, --summary-only, grouping or breakdown.
 
         Examples:
           codexbar cost
           codexbar cost --provider codex --group-by project
           codexbar cost --provider codex --group-by session
+          codexbar cost --provider claude --group-by session
+          codexbar cost --provider pi --group-by session
           codexbar cost --provider claude --format json --pretty
           codexbar cost --provider antigravity --format json
           codexbar cost --provider muse --format json
           codexbar cost --provider codex --remote build-host --format json
-          codexbar cost --provider codex --identified-only --format json --remote build-host
+          codexbar cost --provider codex --identified-only --format json --remote build-a --remote build-b
         """
     }
 
@@ -194,7 +199,7 @@ extension CodexBarCLI {
         CodexBar \(version)
 
         Usage:
-          codexbar dashboard [--pretty] [--timeout <seconds>] [--output <path>]
+          codexbar dashboard [--pretty] [--timeout <seconds>] [--output <path>] [--no-cost]
                              [--identity <redacted|full>]
                              [--json-output] [--log-level <trace|verbose|debug|info|warning|error|critical>]
                              [-v|--verbose]
@@ -206,6 +211,7 @@ extension CodexBarCLI {
           --identity redacted hides email local parts.
           Stdout contains only the JSON document; diagnostics are written to stderr.
           --timeout accepts 0...86400 seconds and defaults to 30; 0 disables the deadline.
+          --no-cost: \(UsageFormatter.localized("Skip cost refresh")).
           --output atomically writes the snapshot to a file (0644) instead of stdout;
           the parent directory must already exist (it is not created), and nothing is
           printed to stdout on success.
@@ -306,6 +312,7 @@ extension CodexBarCLI {
           codexbar config preferences export [--file <preferences.json>]
           codexbar config preferences import --file <preferences.json> [--json]
           codexbar config login --provider copilot [--json]
+          codexbar config login --provider claudeplatform --stdin [--json]
           codexbar config providers [--format text|json] [--json] [--json-only] [--pretty]
           codexbar config enable --provider <name> [--format text|json] [--json] [--json-only] [--pretty]
           codexbar config disable --provider <name> [--format text|json] [--json] [--json-only] [--pretty]

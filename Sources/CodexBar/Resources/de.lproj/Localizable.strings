@@ -1,4 +1,5 @@
 /* English localization for CodexBar (base/fallback) */
+"Copilot subscription ended" = "Das Copilot-Abonnement ist abgelaufen";
 
 /* iCloud Sync */
 "+ %d more" = "+ %d weitere";
@@ -175,6 +176,7 @@
 "Top-up credits" = "Aufgeladene Credits";
 "Remaining" = "Übrig";
 "Credits history" = "Credits-Geschichte";
+"Cursor app session expired — open Cursor to sign in again, or sign in to cursor.com in your browser." = "Die Sitzung der Cursor-App ist abgelaufen — öffne Cursor, um dich erneut anzumelden, oder melde dich im Browser bei cursor.com an.";
 "Cursor login failed" = "Die Cursor-Anmeldung ist fehlgeschlagen";
 "Custom" = "Benutzerdefiniert";
 "Custom Path" = "Benutzerdefinierter Pfad";
@@ -1296,7 +1298,8 @@
 "session_id=...\n\nor paste just the session_id value" = "session_id=...\n\noder fügen Sie nur den session_id-Wert ein";
 "Clear" = "Klar";
 "No matching providers" = "Keine passenden Anbieter";
-"Search providers" = "Suchanbieter";
+"No matching settings or providers" = "Keine passenden Einstellungen oder Anbieter";
+"Search settings" = "Einstellungen durchsuchen";
 
 "Request quota: %@ / %@" = "Anfragelimit: %@ / %@";
 "language_arabic" = "العربية";
@@ -1347,11 +1350,8 @@
 "Share Stats…" = "Statistiken teilen…";
 "Stats copied" = "Statistiken kopiert";
 "DeepSeek this month token usage trend" = "Trend der DeepSeek-Token-Nutzung in diesem Monat";
-"Chrome profile" = "Chrome-Profil";
 "Choose which signed-in DeepSeek Platform session supplies detailed usage." = "Wähle aus, welche angemeldete DeepSeek-Platform-Sitzung detaillierte Nutzungsdaten liefert.";
 "Detailed usage unavailable." = "Detaillierte Nutzung nicht verfügbar.";
-"Sign in to DeepSeek Platform in Chrome for detailed usage." = "Melde dich für detaillierte Nutzungsdaten in Chrome bei DeepSeek Platform an.";
-"Select a DeepSeek Chrome profile in Settings." = "Wähle in den Einstellungen ein DeepSeek-Chrome-Profil aus.";
 "Select profile…" = "Profil auswählen…";
 
 "%@: %@" = "%@: %@";
@@ -1575,7 +1575,7 @@
 "7-day usage" = "7-Tage-Nutzung";
 "Total usage" = "Gesamtnutzung";
 "claude_oauth_keychain_access_disabled" = "Der Keychain-Zugriff ist deaktiviert, daher kann CodexBar die Anmeldedaten von Claude nicht lesen.";
-"claude_oauth_keychain_access_revoked" = "Der Zugriff auf den Claude-Schlüsselbund wurde durch die Token-Rotation von Claude Code widerrufen. Klicken Sie auf „Aktualisieren“, um den Zugriff erneut zu gewähren, oder stellen Sie die Claude-Nutzungsquelle auf CLI/Web um.";
+"claude_oauth_keychain_access_revoked" = "CodexBar kann derzeit nicht auf die OAuth-Anmeldedaten von Claude zugreifen. Klicken Sie auf „Aktualisieren“, um den Zugriff erneut zu versuchen, oder stellen Sie die Claude-Nutzungsquelle auf CLI/Web um.";
 "claude_showing_last_known_usage" = "Letzte bekannte Nutzung wird angezeigt (erfasst: %@).";
 "claude_limited_usage_detail" = "Eingeschränkte Nutzungsdetails";
 /* Spend dashboard cost analysis */
@@ -1753,7 +1753,7 @@
 "Automatic imports longcat.chat cookies from your browser." = "Automatischer Import von longcat.chat cookies aus Ihrem Browser.";
 "Automatically imports browser cookies for budget extras." = "Importiert automatisch den Browser cookies für Budget-Extras.";
 "Automatically imports browser cookies for github.com budget extras." = "Importiert automatisch den Browser cookies für github.com-Budget-Extras.";
-"Automatically imports the app.devin.ai session from Chromium browsers." = "Importiert automatisch die app.devin.ai-Sitzung aus Chromium-Browsern.";
+"Automatically imports the app.devin.ai session from the Devin app or Chromium browsers." = "Importiert automatisch die app.devin.ai-Sitzung aus der Devin-App oder Chromium-Browsern.";
 "Automatically imports the browser session cookie." = "Importiert automatisch die Browsersitzung cookie.";
 "Automatically signs in using your ZoomMate session cookies from Chrome." = "Meldet sich automatisch mit Ihrer ZoomMate-Sitzung cookies von Chrome an.";
 "BY USAGE" = "Geordnet nach Nutzung";
@@ -2762,3 +2762,127 @@
 "Show this Mac's recorded OpenCode usage in Codex history. Off by default; scoped or alternate CODEX_HOME locations always stay excluded." = "Zeigt die auf diesem Mac erfasste OpenCode-Nutzung im Codex-Verlauf. Standardmäßig deaktiviert; CODEX_HOME-Verzeichnisse mit eingeschränktem Geltungsbereich sowie alternative Verzeichnisse bleiben immer ausgeschlossen.";
 "Auto uses the active saved session, otherwise an API key or browser cookies." = "Auto verwendet die aktive gespeicherte Sitzung, andernfalls einen API-Schlüssel oder Browser-Cookies.";
 "Store multiple Command Code subscription sessions." = "Speichern Sie mehrere Command Code-Abonnementsitzungen.";
+
+"codex_reset_credit_expiry_notifications_title" = "Ablauf von Codex-Reset-Guthaben";
+
+"codex_reset_credit_expiry_notifications_subtitle" = "Erinnert bei der Nutzungsaktualisierung 1 Tag und 1 Stunde vor Ablauf.";
+/* OpenDesign */
+"OpenDesign" = "OpenDesign";
+"Show OpenDesign usage" = "OpenDesign-Nutzung anzeigen";
+"Sign in to OpenDesign, then refresh CodexBar." = "Melde dich bei OpenDesign an und aktualisiere dann CodexBar.";
+"OpenDesign usage response format changed." = "Das Format der OpenDesign-Nutzungsantwort hat sich geändert.";
+"OpenDesign billing access was denied." = "Der Zugriff auf die OpenDesign-Abrechnung wurde verweigert.";
+"OpenDesign request failed. Try again later." = "Die OpenDesign-Anfrage ist fehlgeschlagen. Versuche es später erneut.";
+"OpenDesign subscription usage is unavailable for this workspace." = "Die OpenDesign-Abonnementnutzung ist für diesen Arbeitsbereich nicht verfügbar.";
+"upcoming_reset_notifications_title" = "Warnungen vor anstehenden Resets";
+"upcoming_reset_notifications_subtitle" = "Warnt für Codex, bevor das Wochenlimit zurückgesetzt wird, solange das Kontingent noch ungenutzt ist.";
+"upcoming_reset_notification_title" = "%1$@: Reset steht bevor (%2$@)";
+"upcoming_reset_notification_body" = "%1$@ des Kontingents ist noch ungenutzt. Es wird in %2$@ zurückgesetzt; ungenutztes Kontingent verfällt.";
+"upcoming_reset_notification_body_with_account" = "Konto %1$@. %2$@ des Kontingents ist noch ungenutzt. Es wird in %3$@ zurückgesetzt; ungenutztes Kontingent verfällt.";
+"Sign in to DeepSeek Platform in a Chromium-based browser for detailed usage." = "Melde dich für detaillierte Nutzungsdaten in einem Chromium-basierten Browser bei DeepSeek Platform an.";
+"Select a DeepSeek browser profile in Settings." = "Wähle in den Einstellungen ein DeepSeek-Browserprofil aus.";
+"menu_bar_layout_token_separator_glyph_accessibility" = "Trennzeichen %@";
+"menu_bar_layout_separator_pipe" = "Senkrechter Strich";
+"menu_bar_layout_separator_slash" = "Schrägstrich";
+"menu_bar_layout_separator_hyphen" = "Bindestrich";
+"menu_bar_layout_separator_bullet" = "Aufzählungspunkt";
+"menu_bar_layout_separator_diamond" = "Ausgefüllte Raute";
+"menu_bar_layout_separator_hollowDiamond" = "Leere Raute";
+"menu_bar_layout_separator_tilde" = "Tilde";
+"menu_bar_layout_separator_doubleBar" = "Doppelter senkrechter Strich";
+"Rename" = "Umbenennen";
+"Rename account" = "Konto umbenennen";
+"Account name" = "Kontoname";
+"Leave blank to use the default name." = "Leer lassen, um den Standardnamen zu verwenden.";
+"Rewards" = "Prämien";
+"Reward expiry" = "Ablauf der Prämien";
+"China (CNY) is the default. International accounts use https://api.siliconflow.com (USD)." = "China (CNY) ist die Voreinstellung. Internationale Konten verwenden https://api.siliconflow.com (USD).";
+"https://api.siliconflow.cn" = "https://api.siliconflow.cn";
+"SiliconFlow API origin must be https://api.siliconflow.cn or https://api.siliconflow.com." = "Der SiliconFlow-API-Ursprung muss https://api.siliconflow.cn oder https://api.siliconflow.com sein.";
+"SiliconFlow refused the balance query. Check the balance in the SiliconFlow console." = "SiliconFlow hat die Guthabenabfrage abgelehnt. Prüfe das Guthaben in der SiliconFlow-Konsole.";
+
+"SiliconFlow" = "SiliconFlow";
+"Show SiliconFlow usage" = "Nutzung von SiliconFlow anzeigen";
+"SiliconFlow is rate limiting requests. Try again later." = "SiliconFlow begrenzt die Anzahl der Anfragen. Versuche es später erneut.";
+"SiliconFlow request failed. Try refreshing later." = "Die Anfrage an SiliconFlow ist fehlgeschlagen. Versuche es später erneut.";
+"SiliconFlow returned an unrecognized response. Update CodexBar and try again." = "SiliconFlow hat eine unbekannte Antwort zurückgegeben. Aktualisiere CodexBar und versuche es erneut.";
+"Sign in to cloud.siliconflow.cn in your browser, then refresh CodexBar." = "Melde dich im Browser bei cloud.siliconflow.cn an und aktualisiere dann CodexBar.";
+"The SiliconFlow China balance API was retired. Switch SiliconFlow to Web and sign in to cloud.siliconflow.cn." = "Die SiliconFlow-Guthaben-API für China wurde eingestellt. Stelle SiliconFlow auf Web um und melde dich bei cloud.siliconflow.cn an.";
+"SiliconFlow denied access to the console balance (HTTP 403). Open cloud.siliconflow.cn, check that this account can view billing, then refresh." = "SiliconFlow hat den Zugriff auf das Konsolenguthaben verweigert (HTTP 403). Öffne cloud.siliconflow.cn, prüfe, ob dieses Konto die Abrechnung sehen darf, und aktualisiere dann.";
+"Claude Platform session validated and saved." = "Claude Platform-Sitzung wurde validiert und gespeichert.";
+"Use %@ or %@." = "Verwenden Sie %@ oder %@.";
+"Sign in at %@. Supply its Cookie header containing sessionKey privately to %@. Then run %@." = "Melden Sie sich bei %@ an. Übergeben Sie den Cookie-Header mit sessionKey vertraulich an %@. Führen Sie anschließend %@ aus.";
+"Read cookie header from stdin" = "Cookie-Header aus stdin lesen";
+"User-Agent" = "User-Agent";
+"Optional. Paste the User-Agent value from the same request as the Cookie." = "Optional. Füge den User-Agent-Wert aus derselben Anfrage wie den Cookie-Header ein.";
+"Paste the WorkBuddy User-Agent as a single request header value." = "Füge den WorkBuddy-User-Agent als einzelnen Wert eines Anfrage-Headers ein.";
+"TypeSafe billing overview could not be read. Open https://console.typesafe.ai/billing to check access; if the page opens, report the integration failure." = "Die TypeSafe-Abrechnungsübersicht konnte nicht gelesen werden. Öffne https://console.typesafe.ai/billing, um den Zugriff zu prüfen. Wenn sich die Seite öffnet, melde den Integrationsfehler.";
+"No TypeSafe session cookies found. Sign in at console.typesafe.ai/billing or paste a Cookie header." = "Keine TypeSafe-Sitzungscookies gefunden. Melde dich unter console.typesafe.ai/billing an oder füge einen Cookie-Header ein.";
+
+"Tripo" = "Tripo";
+"Show Tripo usage" = "Nutzung von Tripo anzeigen";
+"Tripo is rate limiting requests. Try again later." = "Tripo begrenzt die Anzahl der Anfragen. Versuche es später erneut.";
+"Tripo request failed. Try refreshing later." = "Die Anfrage an Tripo ist fehlgeschlagen. Versuche es später erneut.";
+"Tripo returned an unrecognized response. Update CodexBar and try again." = "Tripo hat eine unbekannte Antwort zurückgegeben. Aktualisiere CodexBar und versuche es erneut.";
+
+/* Provider setup guidance. */
+"Authorize GitHub's device code to save a Copilot token account." = "Autorisiere den Gerätecode von GitHub, um ein Copilot-Tokenkonto zu speichern.";
+"Supply a GitHub token accepted by the Copilot usage API." = "Gib ein GitHub-Token an, das die Copilot-Nutzungs-API akzeptiert.";
+"Optional, best-effort budgets for public github.com only. Enable Budget extras in the macOS app; the browser session must match the token account. Quota usage does not need cookies." = "Optionale Budgets für öffentliches github.com, ohne Gewähr. Aktiviere Budget-Extras in der macOS-App; Browser-Sitzung und Tokenkonto müssen übereinstimmen. Für Kontingente sind keine Cookies nötig.";
+"In the macOS app, select manual cookie source and supply the matching GitHub Cookie header." = "Wähle in der macOS-App die manuelle Cookie-Quelle und gib den passenden GitHub-Cookie-Header an.";
+"Sign in to GitHub in a supported browser and select automatic cookie import in the macOS app." = "Melde dich in einem unterstützten Browser bei GitHub an und wähle den automatischen Cookie-Import in der macOS-App.";
+"Use an organization Admin API key for organization costs and usage. Project/service-account keys cannot read those endpoints." = "Verwende einen Admin-API-Schlüssel der Organisation für Organisationskosten und -nutzung. Projekt- und Dienstkontoschlüssel können diese Endpunkte nicht lesen.";
+"A normal API key supports only best-effort legacy balance fallback, not organization usage. Configured keys with project scoping do not use that fallback." = "Ein normaler API-Schlüssel unterstützt nur den älteren Guthabenabruf ohne Gewähr, nicht die Organisationsnutzung. Konfigurierte Schlüssel mit Projektbeschränkung nutzen diesen Ersatzweg nicht.";
+"Supply a key, HTTPS resource endpoint, and deployment name. API version is optional. A usage refresh sends a potentially billable validation request, not a usage-history query." = "Gib Schlüssel, HTTPS-Ressourcenendpunkt und Bereitstellungsnamen an. Die API-Version ist optional. Eine Aktualisierung sendet eine möglicherweise kostenpflichtige Validierungsanfrage, keine Nutzungsverlaufsabfrage.";
+"Mistral session expired or invalid." = "Die Mistral-Sitzung ist abgelaufen oder ungültig.";
+"The command reads a piped API key and saves it as a standalone key. A selected API token account overrides the standalone key." = "Der Befehl liest einen über eine Pipe übergebenen API-Schlüssel und speichert ihn als eigenständigen Schlüssel. Ein ausgewähltes API-Token-Konto hat Vorrang vor dem eigenständigen Schlüssel.";
+"Use an API key with user_read permission for subscription usage. The command saves a standalone key; a selected API key account takes priority." = "Verwenden Sie einen API-Schlüssel mit der Berechtigung user_read für die Abonnementnutzung. Der Befehl speichert einen separaten Schlüssel; das ausgewählte API-Schlüsselkonto hat Vorrang.";
+"Web" = "Web";
+"Credits per million tokens" = "Credits pro Million Token";
+"Paused during grace period" = "Während der Kulanzfrist pausiert";
+"Google Developer Program exposes the current monthly Cloud credit, not local token cost history." = "Google Developer Program zeigt das aktuelle monatliche Cloud-Guthaben an, nicht den lokalen Token-Kostenverlauf.";
+"Paste a me.developers.google.com Cookie header from a signed-in Google account." = "Einen Cookie-Header von me.developers.google.com eines angemeldeten Google-Kontos einfügen.";
+"Billing account" = "Abrechnungskonto";
+"Granted" = "Gewährt";
+"Not applied" = "Nicht angewendet";
+"%@ of %@ left" = "%@ von %@ übrig";
+"No Cloud credit found. Check your Google Developer Program benefits." = "Kein Cloud-Guthaben gefunden. Prüfe deine Vorteile im Google Developer Program.";
+"Google Developer Program" = "Google Developer Program";
+"Browser session" = "Browsersitzung";
+"Google Developer Program is rate limiting requests. Try again later." = "Google Developer Program begrenzt die Anzahl der Anfragen. Versuche es später erneut.";
+"Google Developer Program request failed. Try refreshing later." = "Die Anfrage an Google Developer Program ist fehlgeschlagen. Versuche es später erneut.";
+"Google Developer Program returned an unrecognized response. Update CodexBar and try again." = "Google Developer Program hat eine unbekannte Antwort zurückgegeben. Aktualisiere CodexBar und versuche es erneut.";
+"Google session expired or invalid." = "Die Google-Sitzung ist abgelaufen oder ungültig.";
+"No Google Developer Program session cookies found. Sign in at me.developers.google.com/benefits or paste a Cookie header." = "Keine Google Developer Program-Sitzungscookies gefunden. Melde dich unter me.developers.google.com/benefits an oder füge einen Cookie-Header ein.";
+
+"Enterprise" = "Enterprise";
+"Personal credits" = "Persönliche Credits";
+"Standard remaining" = "Standard verbleibend";
+"Select remaining" = "Select verbleibend";
+"Remaining credits" = "Verbleibende Credits";
+"Notion Credits" = "Notion-Credits";
+"Notion did not provide usable personal AI allowances for this workspace. Check AI usage for the selected workspace in Notion, then refresh CodexBar again." = "Notion hat keine nutzbaren persönlichen KI-Kontingente für diesen Arbeitsbereich bereitgestellt. Prüfe die KI-Nutzung des ausgewählten Arbeitsbereichs in Notion und aktualisiere CodexBar erneut.";
+"Select" = "Select";
+"TrustedRouter" = "TrustedRouter";
+"Show TrustedRouter usage" = "Nutzung von TrustedRouter anzeigen";
+"TrustedRouter is rate limiting requests. Try again later." = "TrustedRouter begrenzt die Anzahl der Anfragen. Versuche es später erneut.";
+"TrustedRouter request failed. Try refreshing later." = "Die Anfrage an TrustedRouter ist fehlgeschlagen. Versuche es später erneut.";
+"TrustedRouter returned an unrecognized response. Update CodexBar and try again." = "TrustedRouter hat eine unbekannte Antwort zurückgegeben. Aktualisiere CodexBar und versuche es erneut.";
+"MiMo returned an unrecognized response. Update CodexBar and try again." = "MiMo hat eine unbekannte Antwort zurückgegeben. Aktualisiere CodexBar und versuche es erneut.";
+"China mainland" = "Festlandchina";
+"Singapore" = "Singapur";
+"MiMo is rate limiting requests. Try again later." = "MiMo begrenzt die Anzahl der Anfragen. Versuche es später erneut.";
+"MiMo request failed. Try refreshing later." = "Die Anfrage an MiMo ist fehlgeschlagen. Versuche es später erneut.";
+"Skip cost refresh" = "Kostenaktualisierung überspringen";
+
+/* CLIProxyAPI */
+"Track CLIProxyAPI spend" = "CLIProxyAPI-Ausgaben verfolgen";
+"Management key" = "Verwaltungsschlüssel";
+"CLIProxyAPI remote-management secret-key. Also CLIPROXYAPI_MANAGEMENT_KEY." = "Geheimer remote-management-Schlüssel von CLIProxyAPI. Auch CLIPROXYAPI_MANAGEMENT_KEY.";
+"management key…" = "Verwaltungsschlüssel…";
+"Defaults to http://127.0.0.1:8317. HTTPS required except loopback/private-network HTTP." = "Standard: http://127.0.0.1:8317. HTTPS erforderlich außer HTTP über Loopback/privates Netzwerk.";
+"http://127.0.0.1:8317" = "http://127.0.0.1:8317";
+"auth_index (optional)" = "auth_index (optional)";
+"Limit refresh to one credential. Empty scans Codex, Gemini, Antigravity, and Grok." = "Aktualisierung auf eine Zugangsdatei begrenzen. Leer durchsucht Codex, Gemini, Antigravity und Grok.";
+"auth_index…" = "auth_index…";
+"Reads Codex, Gemini, Antigravity, and Grok quota through CLIProxyAPI api-call." = "Liest Kontingente für Codex, Gemini, Antigravity und Grok über CLIProxyAPI api-call.";

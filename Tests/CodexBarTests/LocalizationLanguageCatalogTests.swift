@@ -21,11 +21,13 @@ struct LocalizationLanguageCatalogTests {
         let english = try #require(NSDictionary(contentsOf: resources
                 .appendingPathComponent("en.lproj/Localizable.strings")) as? [String: String])
         let keys = [
+            "Skip cost refresh",
             "%@ accounts",
             "All accounts",
             "By model and reasoning effort",
             "CodexBar follows",
             "Color by provider",
+            "Cursor app session expired — open Cursor to sign in again, or sign in to cursor.com in your browser.",
             "Pace sign",
             "Ahead of pace is +",
             "Reserve is +",
@@ -36,9 +38,15 @@ struct LocalizationLanguageCatalogTests {
             "Local usage is shared across accounts on this Mac.",
             "Model first token may be reasoning, before visible answer text.",
             "Observed turns; workload and tools affect these results.",
+            "OpenDesign billing access was denied.",
+            "OpenDesign request failed. Try again later.",
+            "OpenDesign subscription usage is unavailable for this workspace.",
+            "OpenDesign usage response format changed.",
             "Performance details",
             "Refresh all accounts",
             "Refreshes up to %@ accounts at a time.",
+            "Show OpenDesign usage",
+            "Sign in to OpenDesign, then refresh CodexBar.",
             "Speed range needs 4 completed turns.",
             "Unknown model",
             "Unknown reasoning effort",
@@ -497,40 +505,6 @@ struct LocalizationLanguageCatalogTests {
     }
 
     @Test
-    func `radar card copy exists in every app catalog`() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let resourcesURL = root.appendingPathComponent("Sources/CodexBar/Resources")
-        let catalogs = try FileManager.default.contentsOfDirectory(
-            at: resourcesURL,
-            includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "lproj" }
-
-        #expect(catalogs.count == 23)
-        for catalogURL in catalogs {
-            let stringsURL = catalogURL.appendingPathComponent("Localizable.strings")
-            let catalog = try #require(NSDictionary(contentsOf: stringsURL) as? [String: String])
-            #expect(catalog["Software Engineering"] == nil, "\(catalogURL.lastPathComponent)")
-            let updated = try #require(catalog["Updated absolute %@"])
-            let iq = try #require(catalog["IQ"])
-            let minutes = try #require(catalog["%d min"])
-            let unavailable = try #require(catalog["Unavailable"])
-            #expect(updated.contains("%@"), "\(catalogURL.lastPathComponent)")
-            #expect(!iq.isEmpty, "\(catalogURL.lastPathComponent)")
-            #expect(!unavailable.isEmpty, "\(catalogURL.lastPathComponent)")
-            #expect(minutes.contains("%d"), "\(catalogURL.lastPathComponent)")
-            if catalogURL.lastPathComponent == "en.lproj" {
-                #expect(updated == "Updated %@")
-                #expect(iq == "IQ")
-                #expect(minutes == "%d min")
-                #expect(unavailable == "Unavailable")
-            }
-        }
-    }
-
-    @Test
     func `partial spend copy exists in every app catalog`() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -701,15 +675,7 @@ struct LocalizationLanguageCatalogTests {
 
     @Test
     func `turkish localization matches English catalog and preserves format placeholders`() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let resourcesURL = root.appendingPathComponent("Sources/CodexBar/Resources")
-        let enURL = resourcesURL.appendingPathComponent("en.lproj/Localizable.strings")
-        let trURL = resourcesURL.appendingPathComponent("tr.lproj/Localizable.strings")
-        let english = try #require(NSDictionary(contentsOf: enURL) as? [String: String])
-        let turkish = try #require(NSDictionary(contentsOf: trURL) as? [String: String])
+        let (english, turkish) = try Self.catalogs(comparing: "tr")
 
         #expect(Set(turkish.keys) == Set(english.keys))
         #expect(turkish["language_turkish"] == "Türkçe")
@@ -743,15 +709,7 @@ struct LocalizationLanguageCatalogTests {
 
     @Test
     func `italian localization matches English catalog and includes current UI labels`() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let resourcesURL = root.appendingPathComponent("Sources/CodexBar/Resources")
-        let enURL = resourcesURL.appendingPathComponent("en.lproj/Localizable.strings")
-        let itURL = resourcesURL.appendingPathComponent("it.lproj/Localizable.strings")
-        let english = try #require(NSDictionary(contentsOf: enURL) as? [String: String])
-        let italian = try #require(NSDictionary(contentsOf: itURL) as? [String: String])
+        let (english, italian) = try Self.catalogs(comparing: "it")
 
         #expect(Set(italian.keys) == Set(english.keys))
         #expect(italian["Individual credits"] == "Crediti individuali")
@@ -771,6 +729,7 @@ struct LocalizationLanguageCatalogTests {
             "%@ %@",
             "%@: %@",
             "%@h",
+            "%d min",
             "00000000-0000-0000-0000-000000000000",
             "AKIA...",
             "API URL",
@@ -785,6 +744,7 @@ struct LocalizationLanguageCatalogTests {
             "Cookie: llama_dev_sess=...",
             "Cookie: …",
             "Cursor",
+            "Enterprise",
             "Flash",
             "Flash Lite",
             "Gateway URL",
@@ -793,9 +753,11 @@ struct LocalizationLanguageCatalogTests {
             "Gemini app",
             "GitHub",
             "GitHub cookies",
+            "Google Developer Program",
             "Google OAuth",
             "Grok CLI",
             "Helmcode Cloud",
+            "IQ",
             "Input",
             "Kimi Code",
             "LLMMAN_API_KEY",
@@ -804,11 +766,19 @@ struct LocalizationLanguageCatalogTests {
             "Oasis-Token",
             "Oasis-Token=…",
             "OpenCodex",
+            "OpenDesign",
             "Output",
             "Pro",
+            "Select",
+            "SiliconFlow",
+            "Singapore",
             "SuperGrok OAuth",
             "Token",
             "Trae CN",
+            "Tripo",
+            "TrustedRouter",
+            "User-Agent",
+            "Web",
             "Zed cookie",
             "ZeroGPU",
             "__raycast_session=…; csrf_token=…",
@@ -816,6 +786,7 @@ struct LocalizationLanguageCatalogTests {
             "ak_…",
             "antigravity-cli-usage",
             "antigravity-cli-version",
+            "auth_index…",
             "byte_unit_byte",
             "byte_unit_gigabyte",
             "byte_unit_kilobyte",
@@ -833,8 +804,10 @@ struct LocalizationLanguageCatalogTests {
             "gsk_...",
             "hooks_executable_placeholder",
             "hooks_threshold_placeholder",
+            "http://127.0.0.1:8317",
             "http_server_dashboard",
             "https://api.aixy-gateway.com",
+            "https://api.siliconflow.cn",
             "https://bifrost.example.com",
             "https://litellm.example.com",
             "https://openrouter.ai/api/v1",
@@ -849,6 +822,7 @@ struct LocalizationLanguageCatalogTests {
             "language_russian",
             "language_thai",
             "link_github",
+            "menu_bar_layout_separator_tilde",
             "ollama-...",
             "org/example-org",
             "ory_session_…=…; csrftoken=…",
@@ -990,6 +964,21 @@ extension LocalizationLanguageCatalogTests {
         #expect(rendered.contains("3개 서비스"))
     }
 
+    private static func catalogs(
+        comparing languageCode: String) throws -> (english: [String: String], localized: [String: String])
+    {
+        let resourcesURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/CodexBar/Resources")
+        let enURL = resourcesURL.appendingPathComponent("en.lproj/Localizable.strings")
+        let localizedURL = resourcesURL.appendingPathComponent("\(languageCode).lproj/Localizable.strings")
+        let english = try #require(NSDictionary(contentsOf: enURL) as? [String: String])
+        let localized = try #require(NSDictionary(contentsOf: localizedURL) as? [String: String])
+        return (english, localized)
+    }
+
     private static func withTemporaryDefaults(
         for testName: String,
         _ body: (UserDefaults, String) -> Void)
@@ -1064,6 +1053,40 @@ extension LocalizationLanguageCatalogTests {
                 for key in keys {
                     #expect(L(key) != key, "Untranslated \(language.rawValue): \(key)")
                 }
+            }
+        }
+    }
+
+    @Test
+    func `radar card copy exists in every app catalog`() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let resourcesURL = root.appendingPathComponent("Sources/CodexBar/Resources")
+        let catalogs = try FileManager.default.contentsOfDirectory(
+            at: resourcesURL,
+            includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "lproj" }
+
+        #expect(catalogs.count == 23)
+        for catalogURL in catalogs {
+            let stringsURL = catalogURL.appendingPathComponent("Localizable.strings")
+            let catalog = try #require(NSDictionary(contentsOf: stringsURL) as? [String: String])
+            #expect(catalog["Software Engineering"] == nil, "\(catalogURL.lastPathComponent)")
+            let updated = try #require(catalog["Updated absolute %@"])
+            let iq = try #require(catalog["IQ"])
+            let minutes = try #require(catalog["%d min"])
+            let unavailable = try #require(catalog["Unavailable"])
+            #expect(updated.contains("%@"), "\(catalogURL.lastPathComponent)")
+            #expect(!iq.isEmpty, "\(catalogURL.lastPathComponent)")
+            #expect(!unavailable.isEmpty, "\(catalogURL.lastPathComponent)")
+            #expect(minutes.contains("%d"), "\(catalogURL.lastPathComponent)")
+            if catalogURL.lastPathComponent == "en.lproj" {
+                #expect(updated == "Updated %@")
+                #expect(iq == "IQ")
+                #expect(minutes == "%d min")
+                #expect(unavailable == "Unavailable")
             }
         }
     }

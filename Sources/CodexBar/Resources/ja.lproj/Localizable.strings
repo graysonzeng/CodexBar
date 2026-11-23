@@ -1,4 +1,5 @@
 /* Japanese localization for CodexBar */
+"Copilot subscription ended" = "Copilotのサブスクリプションは終了しました";
 
 /* iCloud Sync */
 "+ %d more" = "他 %d 件";
@@ -177,6 +178,7 @@
 "Individual credits" = "個人クレジット";
 "Workspace" = "ワークスペース";
 "Credits history" = "クレジット履歴";
+"Cursor app session expired — open Cursor to sign in again, or sign in to cursor.com in your browser." = "Cursorアプリのセッションの有効期限が切れました。Cursorを開いて再度ログインするか、ブラウザでcursor.comにログインしてください。";
 "Cursor login failed" = "Cursor のログインに失敗しました";
 "Custom" = "カスタム";
 "Custom Path" = "カスタムパス";
@@ -1293,7 +1295,8 @@
 "session_id=...\n\nor paste just the session_id value" = "session_id=...\n\nまたは session_id の値のみを貼り付けてください";
 "Clear" = "消去";
 "No matching providers" = "一致するプロバイダがありません";
-"Search providers" = "プロバイダを検索";
+"No matching settings or providers" = "一致する設定またはプロバイダがありません";
+"Search settings" = "設定を検索";
 
 "language_vietnamese" = "ベトナム語";
 "language_turkish" = "トルコ語";
@@ -1346,11 +1349,8 @@
 "Share Stats…" = "統計を共有…";
 "Stats copied" = "統計をコピーしました";
 "DeepSeek this month token usage trend" = "今月の DeepSeek トークン使用量の推移";
-"Chrome profile" = "Chrome プロファイル";
 "Choose which signed-in DeepSeek Platform session supplies detailed usage." = "詳細な使用状況を取得する、ログイン済みの DeepSeek Platform セッションを選択します。";
 "Detailed usage unavailable." = "詳細な使用状況を取得できません。";
-"Sign in to DeepSeek Platform in Chrome for detailed usage." = "詳細な使用状況を確認するには、Chrome で DeepSeek Platform にログインしてください。";
-"Select a DeepSeek Chrome profile in Settings." = "設定で DeepSeek の Chrome プロファイルを選択してください。";
 "Select profile…" = "プロファイルを選択…";
 
 "%@: %@" = "%@: %@";
@@ -1573,7 +1573,7 @@
 "7-day usage" = "7日間の使用量";
 "Total usage" = "合計使用量";
 "claude_oauth_keychain_access_disabled" = "Keychain へのアクセスが無効になっているため、CodexBar は Claude のサインイン情報を読み取れません。";
-"claude_oauth_keychain_access_revoked" = "Claude Code のトークン更新により、Claude キーチェーンへのアクセスが取り消されました。「更新」をクリックしてアクセスを再許可するか、Claude の使用量の取得元を CLI/Web に切り替えてください。";
+"claude_oauth_keychain_access_revoked" = "現在、CodexBar は Claude の OAuth 認証情報にアクセスできません。「更新」をクリックしてアクセスを再試行するか、Claude の使用量の取得元を CLI/Web に切り替えてください。";
 "claude_showing_last_known_usage" = "最後に取得した既知の使用量を表示しています（取得: %@）。";
 "claude_limited_usage_detail" = "使用量の詳細情報は限られています";
 /* Spend dashboard cost analysis */
@@ -1751,7 +1751,7 @@
 "Automatic imports longcat.chat cookies from your browser." = "ブラウザから longcat.chat cookies を自動的にインポートします。";
 "Automatically imports browser cookies for budget extras." = "予算追加のためにブラウザ cookies を自動的にインポートします。";
 "Automatically imports browser cookies for github.com budget extras." = "github.com 予算追加分のブラウザ cookies を自動的にインポートします。";
-"Automatically imports the app.devin.ai session from Chromium browsers." = "Chromium ブラウザから app.devin.ai セッションを自動的にインポートします。";
+"Automatically imports the app.devin.ai session from the Devin app or Chromium browsers." = "Devin アプリまたは Chromium ブラウザから app.devin.ai セッションを自動的にインポートします。";
 "Automatically imports the browser session cookie." = "ブラウザセッション cookie を自動的にインポートします。";
 "Automatically signs in using your ZoomMate session cookies from Chrome." = "Chrome からの ZoomMate セッション cookies を使用して自動的にサインインします。";
 "BY USAGE" = "使用量順";
@@ -2764,3 +2764,127 @@
 "Show this Mac's recorded OpenCode usage in Codex history. Off by default; scoped or alternate CODEX_HOME locations always stay excluded." = "この Mac に記録された OpenCode の使用状況を Codex の履歴に表示します。デフォルトではオフです。スコープが限定された場所や代替の CODEX_HOME の場所は常に除外されます。";
 "Auto uses the active saved session, otherwise an API key or browser cookies." = "自動では使用中の保存済みセッションを使用し、それ以外の場合は API キーまたはブラウザの Cookie を使用します。";
 "Store multiple Command Code subscription sessions." = "Command Code サブスクリプションのセッションを複数保存します。";
+
+"codex_reset_credit_expiry_notifications_title" = "Codex リセットクレジットの有効期限";
+
+"codex_reset_credit_expiry_notifications_subtitle" = "使用状況の更新時に、有効期限の1日前と1時間前にリマインダーを通知します。";
+/* OpenDesign */
+"OpenDesign" = "OpenDesign";
+"Show OpenDesign usage" = "OpenDesignの使用状況を表示";
+"Sign in to OpenDesign, then refresh CodexBar." = "OpenDesignにサインインしてから、CodexBarを更新してください。";
+"OpenDesign usage response format changed." = "OpenDesignの使用状況の応答形式が変更されました。";
+"OpenDesign billing access was denied." = "OpenDesignの請求情報へのアクセスが拒否されました。";
+"OpenDesign request failed. Try again later." = "OpenDesignへのリクエストに失敗しました。後でもう一度お試しください。";
+"OpenDesign subscription usage is unavailable for this workspace." = "このワークスペースではOpenDesignのサブスクリプション使用状況を取得できません。";
+"upcoming_reset_notifications_title" = "リセット前の警告";
+"upcoming_reset_notifications_subtitle" = "週間上限のリセット前に、クォータがまだ残っている場合にCodexに警告します。";
+"upcoming_reset_notification_title" = "%1$@ の%2$@上限がまもなくリセットされます";
+"upcoming_reset_notification_body" = "クォータの%1$@がまだ未使用です。%2$@後にリセットされ、未使用のクォータは失われます。";
+"upcoming_reset_notification_body_with_account" = "アカウント %1$@。クォータの%2$@がまだ未使用です。%3$@後にリセットされ、未使用のクォータは失われます。";
+"Sign in to DeepSeek Platform in a Chromium-based browser for detailed usage." = "詳細な使用状況を確認するには、Chromium ベースのブラウザーで DeepSeek Platform にログインしてください。";
+"Select a DeepSeek browser profile in Settings." = "設定で DeepSeek のブラウザープロファイルを選択してください。";
+"menu_bar_layout_token_separator_glyph_accessibility" = "区切り %@";
+"menu_bar_layout_separator_pipe" = "縦棒";
+"menu_bar_layout_separator_slash" = "スラッシュ";
+"menu_bar_layout_separator_hyphen" = "ハイフン";
+"menu_bar_layout_separator_bullet" = "中黒";
+"menu_bar_layout_separator_diamond" = "黒ひし形";
+"menu_bar_layout_separator_hollowDiamond" = "白ひし形";
+"menu_bar_layout_separator_tilde" = "チルダ";
+"menu_bar_layout_separator_doubleBar" = "二重縦棒";
+"Rename" = "名前を変更";
+"Rename account" = "アカウント名を変更";
+"Account name" = "アカウント名";
+"Leave blank to use the default name." = "空欄にするとデフォルトの名前を使用します。";
+"Rewards" = "報酬";
+"Reward expiry" = "報酬の有効期限";
+"China (CNY) is the default. International accounts use https://api.siliconflow.com (USD)." = "既定は中国（CNY）です。海外アカウントは https://api.siliconflow.com（USD）を使います。";
+"https://api.siliconflow.cn" = "https://api.siliconflow.cn";
+"SiliconFlow API origin must be https://api.siliconflow.cn or https://api.siliconflow.com." = "SiliconFlow API のオリジンは https://api.siliconflow.cn または https://api.siliconflow.com である必要があります。";
+"SiliconFlow refused the balance query. Check the balance in the SiliconFlow console." = "SiliconFlow が残高の照会を拒否しました。SiliconFlow コンソールで残高を確認してください。";
+
+"SiliconFlow" = "SiliconFlow";
+"Show SiliconFlow usage" = "SiliconFlow の使用状況を表示";
+"SiliconFlow is rate limiting requests. Try again later." = "SiliconFlow がリクエストの頻度を制限しています。後でもう一度お試しください。";
+"SiliconFlow request failed. Try refreshing later." = "SiliconFlow へのリクエストに失敗しました。後でもう一度更新してください。";
+"SiliconFlow returned an unrecognized response. Update CodexBar and try again." = "SiliconFlow から認識できない応答が返されました。CodexBar を更新して、もう一度お試しください。";
+"Sign in to cloud.siliconflow.cn in your browser, then refresh CodexBar." = "ブラウザでcloud.siliconflow.cnにサインインしてから、CodexBarを更新してください。";
+"The SiliconFlow China balance API was retired. Switch SiliconFlow to Web and sign in to cloud.siliconflow.cn." = "SiliconFlow中国版の残高APIは廃止されました。SiliconFlowのソースをWebに切り替え、cloud.siliconflow.cnにサインインしてください。";
+"SiliconFlow denied access to the console balance (HTTP 403). Open cloud.siliconflow.cn, check that this account can view billing, then refresh." = "SiliconFlowがコンソール残高へのアクセスを拒否しました（HTTP 403）。cloud.siliconflow.cnを開き、このアカウントで請求情報を表示できることを確認してから更新してください。";
+"Claude Platform session validated and saved." = "Claude Platform のセッションを検証して保存しました。";
+"Use %@ or %@." = "%@ または %@ を使用してください。";
+"Sign in at %@. Supply its Cookie header containing sessionKey privately to %@. Then run %@." = "%@ にサインインしてください。sessionKey を含む Cookie ヘッダーを %@ に非公開で渡してください。その後、%@ を実行してください。";
+"Read cookie header from stdin" = "stdin から Cookie ヘッダーを読み取る";
+"User-Agent" = "User-Agent";
+"Optional. Paste the User-Agent value from the same request as the Cookie." = "任意。Cookie ヘッダーと同じリクエストの User-Agent 値を貼り付けてください。";
+"Paste the WorkBuddy User-Agent as a single request header value." = "WorkBuddy の User-Agent を単一のリクエストヘッダー値として貼り付けてください。";
+"TypeSafe billing overview could not be read. Open https://console.typesafe.ai/billing to check access; if the page opens, report the integration failure." = "TypeSafeの請求概要を読み取れませんでした。https://console.typesafe.ai/billing を開いてアクセスを確認してください。ページが開く場合は、連携の不具合を報告してください。";
+"No TypeSafe session cookies found. Sign in at console.typesafe.ai/billing or paste a Cookie header." = "TypeSafeのセッションCookieが見つかりません。console.typesafe.ai/billing にサインインするか、Cookieヘッダーを貼り付けてください。";
+
+"Tripo" = "Tripo";
+"Show Tripo usage" = "Tripo の使用状況を表示";
+"Tripo is rate limiting requests. Try again later." = "Tripo がリクエストの頻度を制限しています。後でもう一度お試しください。";
+"Tripo request failed. Try refreshing later." = "Tripo へのリクエストに失敗しました。後でもう一度更新してください。";
+"Tripo returned an unrecognized response. Update CodexBar and try again." = "Tripo から認識できない応答が返されました。CodexBar を更新して、もう一度お試しください。";
+
+/* Provider setup guidance. */
+"Authorize GitHub's device code to save a Copilot token account." = "GitHubのデバイスコードを承認して、Copilotトークンアカウントを保存します。";
+"Supply a GitHub token accepted by the Copilot usage API." = "Copilotの使用量APIで受け付けられるGitHubトークンを指定してください。";
+"Optional, best-effort budgets for public github.com only. Enable Budget extras in the macOS app; the browser session must match the token account. Quota usage does not need cookies." = "公開のgithub.com専用の任意の予算取得です。取得は保証されません。macOSアプリで予算の追加情報を有効にし、ブラウザのセッションとトークンのアカウントを一致させてください。利用枠の取得にCookieは不要です。";
+"In the macOS app, select manual cookie source and supply the matching GitHub Cookie header." = "macOSアプリで手動のCookieソースを選び、対応するGitHubのCookieヘッダーを指定してください。";
+"Sign in to GitHub in a supported browser and select automatic cookie import in the macOS app." = "対応ブラウザでGitHubにサインインし、macOSアプリでCookieの自動インポートを選択してください。";
+"Use an organization Admin API key for organization costs and usage. Project/service-account keys cannot read those endpoints." = "組織のコストと使用量には、組織のAdmin APIキーを使用してください。プロジェクトやサービスアカウントのキーではこれらのエンドポイントを読み取れません。";
+"A normal API key supports only best-effort legacy balance fallback, not organization usage. Configured keys with project scoping do not use that fallback." = "通常のAPIキーでは、従来の残高を代替手段として取得できる場合があります。組織の使用量には対応しません。プロジェクト範囲を設定したキーでは、この代替手段は使われません。";
+"Supply a key, HTTPS resource endpoint, and deployment name. API version is optional. A usage refresh sends a potentially billable validation request, not a usage-history query." = "キー、HTTPSリソースエンドポイント、デプロイ名を指定してください。APIバージョンは任意です。更新では使用履歴の照会ではなく、課金される可能性がある検証リクエストを送信します。";
+"Mistral session expired or invalid." = "Mistralのセッションが期限切れか無効です。";
+"The command reads a piped API key and saves it as a standalone key. A selected API token account overrides the standalone key." = "このコマンドはパイプで渡された API キーを読み取り、単独のキーとして保存します。選択された API トークンアカウントは、単独のキーより優先されます。";
+"Use an API key with user_read permission for subscription usage. The command saves a standalone key; a selected API key account takes priority." = "サブスクリプションの使用状況を取得するには、user_read 権限のある API キーを使用します。このコマンドは単独のキーを保存します。選択中の API キーアカウントが優先されます。";
+"Web" = "Web";
+"Credits per million tokens" = "100万トークンあたりのクレジット";
+"Paused during grace period" = "猶予期間中は一時停止";
+"Google Developer Program exposes the current monthly Cloud credit, not local token cost history." = "Google Developer Program は今月の Cloud クレジットを表示します。ローカルのトークン費用履歴ではありません。";
+"Paste a me.developers.google.com Cookie header from a signed-in Google account." = "ログイン済みの Google アカウントの me.developers.google.com Cookie ヘッダーを貼り付けてください。";
+"Billing account" = "請求先アカウント";
+"Granted" = "付与日";
+"Not applied" = "未適用";
+"%@ of %@ left" = "残り %@ / %@";
+"No Cloud credit found. Check your Google Developer Program benefits." = "Cloud クレジットが見つかりません。Google Developer Program の特典を確認してください。";
+"Google Developer Program" = "Google Developer Program";
+"Browser session" = "ブラウザセッション";
+"Google Developer Program is rate limiting requests. Try again later." = "Google Developer Program がリクエストの頻度を制限しています。後でもう一度お試しください。";
+"Google Developer Program request failed. Try refreshing later." = "Google Developer Program へのリクエストに失敗しました。後でもう一度更新してください。";
+"Google Developer Program returned an unrecognized response. Update CodexBar and try again." = "Google Developer Program から認識できない応答が返されました。CodexBar を更新して、もう一度お試しください。";
+"Google session expired or invalid." = "Googleのセッションが期限切れか無効です。";
+"No Google Developer Program session cookies found. Sign in at me.developers.google.com/benefits or paste a Cookie header." = "Google Developer ProgramのセッションCookieが見つかりません。me.developers.google.com/benefits にサインインするか、Cookieヘッダーを貼り付けてください。";
+
+"Enterprise" = "Enterprise";
+"Personal credits" = "個人クレジット";
+"Standard remaining" = "Standard 残量";
+"Select remaining" = "Select 残量";
+"Remaining credits" = "残りのクレジット";
+"Notion Credits" = "Notion クレジット";
+"Notion did not provide usable personal AI allowances for this workspace. Check AI usage for the selected workspace in Notion, then refresh CodexBar again." = "Notion はこのワークスペースで利用できる個人 AI 利用枠を返しませんでした。Notion で選択したワークスペースの AI 使用量を確認してから、CodexBar を再度更新してください。";
+"Select" = "Select";
+"TrustedRouter" = "TrustedRouter";
+"Show TrustedRouter usage" = "TrustedRouter の使用状況を表示";
+"TrustedRouter is rate limiting requests. Try again later." = "TrustedRouter がリクエストの頻度を制限しています。後でもう一度お試しください。";
+"TrustedRouter request failed. Try refreshing later." = "TrustedRouter へのリクエストに失敗しました。後でもう一度更新してください。";
+"TrustedRouter returned an unrecognized response. Update CodexBar and try again." = "TrustedRouter から認識できない応答が返されました。CodexBar を更新して、もう一度お試しください。";
+"MiMo returned an unrecognized response. Update CodexBar and try again." = "MiMo から認識できない応答が返されました。CodexBar を更新して、もう一度お試しください。";
+"China mainland" = "中国本土";
+"Singapore" = "シンガポール";
+"MiMo is rate limiting requests. Try again later." = "MiMo がリクエストの頻度を制限しています。後でもう一度お試しください。";
+"MiMo request failed. Try refreshing later." = "MiMo へのリクエストに失敗しました。後でもう一度更新してください。";
+"Skip cost refresh" = "コストの更新をスキップ";
+
+/* CLIProxyAPI */
+"Track CLIProxyAPI spend" = "CLIProxyAPI の支出を追跡";
+"Management key" = "管理キー";
+"CLIProxyAPI remote-management secret-key. Also CLIPROXYAPI_MANAGEMENT_KEY." = "CLIProxyAPI の remote-management secret-key。CLIPROXYAPI_MANAGEMENT_KEY も使用可。";
+"management key…" = "管理キー…";
+"Defaults to http://127.0.0.1:8317. HTTPS required except loopback/private-network HTTP." = "既定は http://127.0.0.1:8317。ループバック/プライベートネットワークの HTTP を除き HTTPS が必要です。";
+"http://127.0.0.1:8317" = "http://127.0.0.1:8317";
+"auth_index (optional)" = "auth_index（任意）";
+"Limit refresh to one credential. Empty scans Codex, Gemini, Antigravity, and Grok." = "更新を1つの認証情報に限定します。空の場合は Codex、Gemini、Antigravity、Grok をスキャンします。";
+"auth_index…" = "auth_index…";
+"Reads Codex, Gemini, Antigravity, and Grok quota through CLIProxyAPI api-call." = "CLIProxyAPI の api-call を通じて Codex、Gemini、Antigravity、Grok のクォータを読み取ります。";

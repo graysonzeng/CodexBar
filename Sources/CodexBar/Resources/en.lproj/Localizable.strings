@@ -1,4 +1,5 @@
 /* English localization for CodexBar (base/fallback) */
+"Copilot subscription ended" = "Copilot subscription ended";
 
 "+ %d more" = "+ %d more";
 "Conversations (%@)" = "Conversations (%@)";
@@ -7,7 +8,7 @@
 "ollama_browser_cookie_decryption_denied" = "%@ cookie decryption was declined in Keychain. Open the provider card and click Refresh (⌘R) to request Keychain access again.";
 "ollama_browser_cookie_decryption_disabled" = "%@ cookie decryption is disabled in CodexBar; enable Keychain access and refresh.";
 "claude_oauth_keychain_access_disabled" = "Keychain access is disabled, so CodexBar can't read Claude's sign-in.";
-"claude_oauth_keychain_access_revoked" = "Claude Keychain access was revoked by Claude Code's token rotation. Click Refresh to re-grant access, or switch Claude Usage source to CLI/Web.";
+"claude_oauth_keychain_access_revoked" = "Claude OAuth credentials are currently unavailable to CodexBar. Click Refresh to retry access, or switch Claude Usage source to CLI/Web.";
 "claude_showing_last_known_usage" = "Showing last-known usage captured %@.";
 "claude_limited_usage_detail" = "Limited usage detail";
 
@@ -142,6 +143,7 @@
 "Show less" = "Show less";
 "Workspace" = "Workspace";
 "Credits history" = "Credits history";
+"Cursor app session expired — open Cursor to sign in again, or sign in to cursor.com in your browser." = "Cursor app session expired — open Cursor to sign in again, or sign in to cursor.com in your browser.";
 "Cursor login failed" = "Cursor login failed";
 "Custom" = "Custom";
 "Custom Path" = "Custom Path";
@@ -1047,11 +1049,8 @@
 "Today cash" = "Today cash";
 "DeepSeek 30 day token usage trend" = "DeepSeek 30 day token usage trend";
 "DeepSeek this month token usage trend" = "DeepSeek this month token usage trend";
-"Chrome profile" = "Chrome profile";
 "Choose which signed-in DeepSeek Platform session supplies detailed usage." = "Choose which signed-in DeepSeek Platform session supplies detailed usage.";
 "Detailed usage unavailable." = "Detailed usage unavailable.";
-"Sign in to DeepSeek Platform in Chrome for detailed usage." = "Sign in to DeepSeek Platform in Chrome for detailed usage.";
-"Select a DeepSeek Chrome profile in Settings." = "Select a DeepSeek Chrome profile in Settings.";
 "Select profile…" = "Select profile…";
 "cache-hit input" = "cache-hit input";
 "cache-miss input" = "cache-miss input";
@@ -1298,7 +1297,8 @@
 "session_id=...\n\nor paste just the session_id value" = "session_id=...\n\nor paste just the session_id value";
 "Clear" = "Clear";
 "No matching providers" = "No matching providers";
-"Search providers" = "Search providers";
+"No matching settings or providers" = "No matching settings or providers";
+"Search settings" = "Search settings";
 
 "language_vietnamese" = "Vietnamese";
 "language_indonesian" = "Bahasa Indonesia";
@@ -1756,7 +1756,7 @@
 "Automatic imports longcat.chat cookies from your browser." = "Automatic imports longcat.chat cookies from your browser.";
 "Automatically imports browser cookies for budget extras." = "Automatically imports browser cookies for budget extras.";
 "Automatically imports browser cookies for github.com budget extras." = "Automatically imports browser cookies for github.com budget extras.";
-"Automatically imports the app.devin.ai session from Chromium browsers." = "Automatically imports the app.devin.ai session from Chromium browsers.";
+"Automatically imports the app.devin.ai session from the Devin app or Chromium browsers." = "Automatically imports the app.devin.ai session from the Devin app or Chromium browsers.";
 "Automatically imports the browser session cookie." = "Automatically imports the browser session cookie.";
 "Automatically signs in using your ZoomMate session cookies from Chrome." = "Automatically signs in using your ZoomMate session cookies from Chrome.";
 "BY USAGE" = "BY USAGE";
@@ -2769,3 +2769,127 @@
 "OpenCode local history" = "OpenCode local history";
 
 "Show this Mac's recorded OpenCode usage in Codex history. Off by default; scoped or alternate CODEX_HOME locations always stay excluded." = "Show this Mac's recorded OpenCode usage in Codex history. Off by default; scoped or alternate CODEX_HOME locations always stay excluded.";
+
+"codex_reset_credit_expiry_notifications_title" = "Codex reset credit expiry";
+
+"codex_reset_credit_expiry_notifications_subtitle" = "Adds reminders on usage refresh 1 day and 1 hour before expiry.";
+/* OpenDesign */
+"OpenDesign" = "OpenDesign";
+"Show OpenDesign usage" = "Show OpenDesign usage";
+"Sign in to OpenDesign, then refresh CodexBar." = "Sign in to OpenDesign, then refresh CodexBar.";
+"OpenDesign usage response format changed." = "OpenDesign usage response format changed.";
+"OpenDesign billing access was denied." = "OpenDesign billing access was denied.";
+"OpenDesign request failed. Try again later." = "OpenDesign request failed. Try again later.";
+"OpenDesign subscription usage is unavailable for this workspace." = "OpenDesign subscription usage is unavailable for this workspace.";
+"upcoming_reset_notifications_title" = "Upcoming reset warnings";
+"upcoming_reset_notifications_subtitle" = "Warns for Codex before the weekly limit resets while quota is unused.";
+"upcoming_reset_notification_title" = "%1$@ %2$@ reset soon";
+"upcoming_reset_notification_body" = "%1$@ of the quota is still unused. It resets in %2$@ and unused quota is lost.";
+"upcoming_reset_notification_body_with_account" = "Account %1$@. %2$@ of the quota is still unused. It resets in %3$@ and unused quota is lost.";
+"Sign in to DeepSeek Platform in a Chromium-based browser for detailed usage." = "Sign in to DeepSeek Platform in a Chromium-based browser for detailed usage.";
+"Select a DeepSeek browser profile in Settings." = "Select a DeepSeek browser profile in Settings.";
+"menu_bar_layout_token_separator_glyph_accessibility" = "Separator %@";
+"menu_bar_layout_separator_pipe" = "Vertical bar";
+"menu_bar_layout_separator_slash" = "Slash";
+"menu_bar_layout_separator_hyphen" = "Hyphen";
+"menu_bar_layout_separator_bullet" = "Bullet";
+"menu_bar_layout_separator_diamond" = "Solid diamond";
+"menu_bar_layout_separator_hollowDiamond" = "Hollow diamond";
+"menu_bar_layout_separator_tilde" = "Tilde";
+"menu_bar_layout_separator_doubleBar" = "Double vertical bar";
+"Rename" = "Rename";
+"Rename account" = "Rename account";
+"Account name" = "Account name";
+"Leave blank to use the default name." = "Leave blank to use the default name.";
+"Rewards" = "Rewards";
+"Reward expiry" = "Reward expiry";
+"China (CNY) is the default. International accounts use https://api.siliconflow.com (USD)." = "China (CNY) is the default. International accounts use https://api.siliconflow.com (USD).";
+"https://api.siliconflow.cn" = "https://api.siliconflow.cn";
+"SiliconFlow API origin must be https://api.siliconflow.cn or https://api.siliconflow.com." = "SiliconFlow API origin must be https://api.siliconflow.cn or https://api.siliconflow.com.";
+"SiliconFlow refused the balance query. Check the balance in the SiliconFlow console." = "SiliconFlow refused the balance query. Check the balance in the SiliconFlow console.";
+
+"SiliconFlow" = "SiliconFlow";
+"Show SiliconFlow usage" = "Show SiliconFlow usage";
+"SiliconFlow is rate limiting requests. Try again later." = "SiliconFlow is rate limiting requests. Try again later.";
+"SiliconFlow request failed. Try refreshing later." = "SiliconFlow request failed. Try refreshing later.";
+"SiliconFlow returned an unrecognized response. Update CodexBar and try again." = "SiliconFlow returned an unrecognized response. Update CodexBar and try again.";
+"Sign in to cloud.siliconflow.cn in your browser, then refresh CodexBar." = "Sign in to cloud.siliconflow.cn in your browser, then refresh CodexBar.";
+"The SiliconFlow China balance API was retired. Switch SiliconFlow to Web and sign in to cloud.siliconflow.cn." = "The SiliconFlow China balance API was retired. Switch SiliconFlow to Web and sign in to cloud.siliconflow.cn.";
+"SiliconFlow denied access to the console balance (HTTP 403). Open cloud.siliconflow.cn, check that this account can view billing, then refresh." = "SiliconFlow denied access to the console balance (HTTP 403). Open cloud.siliconflow.cn, check that this account can view billing, then refresh.";
+"Claude Platform session validated and saved." = "Claude Platform session validated and saved.";
+"Use %@ or %@." = "Use %@ or %@.";
+"Sign in at %@. Supply its Cookie header containing sessionKey privately to %@. Then run %@." = "Sign in at %@. Supply its Cookie header containing sessionKey privately to %@. Then run %@.";
+"Read cookie header from stdin" = "Read cookie header from stdin";
+"User-Agent" = "User-Agent";
+"Optional. Paste the User-Agent value from the same request as the Cookie." = "Optional. Paste the User-Agent value from the same request as the Cookie.";
+"Paste the WorkBuddy User-Agent as a single request header value." = "Paste the WorkBuddy User-Agent as a single request header value.";
+"TypeSafe billing overview could not be read. Open https://console.typesafe.ai/billing to check access; if the page opens, report the integration failure." = "TypeSafe billing overview could not be read. Open https://console.typesafe.ai/billing to check access; if the page opens, report the integration failure.";
+"No TypeSafe session cookies found. Sign in at console.typesafe.ai/billing or paste a Cookie header." = "No TypeSafe session cookies found. Sign in at console.typesafe.ai/billing or paste a Cookie header.";
+
+"Tripo" = "Tripo";
+"Show Tripo usage" = "Show Tripo usage";
+"Tripo is rate limiting requests. Try again later." = "Tripo is rate limiting requests. Try again later.";
+"Tripo request failed. Try refreshing later." = "Tripo request failed. Try refreshing later.";
+"Tripo returned an unrecognized response. Update CodexBar and try again." = "Tripo returned an unrecognized response. Update CodexBar and try again.";
+
+/* Provider setup guidance. */
+"Authorize GitHub's device code to save a Copilot token account." = "Authorize GitHub's device code to save a Copilot token account.";
+"Supply a GitHub token accepted by the Copilot usage API." = "Supply a GitHub token accepted by the Copilot usage API.";
+"Optional, best-effort budgets for public github.com only. Enable Budget extras in the macOS app; the browser session must match the token account. Quota usage does not need cookies." = "Optional, best-effort budgets for public github.com only. Enable Budget extras in the macOS app; the browser session must match the token account. Quota usage does not need cookies.";
+"In the macOS app, select manual cookie source and supply the matching GitHub Cookie header." = "In the macOS app, select manual cookie source and supply the matching GitHub Cookie header.";
+"Sign in to GitHub in a supported browser and select automatic cookie import in the macOS app." = "Sign in to GitHub in a supported browser and select automatic cookie import in the macOS app.";
+"Use an organization Admin API key for organization costs and usage. Project/service-account keys cannot read those endpoints." = "Use an organization Admin API key for organization costs and usage. Project/service-account keys cannot read those endpoints.";
+"A normal API key supports only best-effort legacy balance fallback, not organization usage. Configured keys with project scoping do not use that fallback." = "A normal API key supports only best-effort legacy balance fallback, not organization usage. Configured keys with project scoping do not use that fallback.";
+"Supply a key, HTTPS resource endpoint, and deployment name. API version is optional. A usage refresh sends a potentially billable validation request, not a usage-history query." = "Supply a key, HTTPS resource endpoint, and deployment name. API version is optional. A usage refresh sends a potentially billable validation request, not a usage-history query.";
+"Mistral session expired or invalid." = "Mistral session expired or invalid.";
+"The command reads a piped API key and saves it as a standalone key. A selected API token account overrides the standalone key." = "The command reads a piped API key and saves it as a standalone key. A selected API token account overrides the standalone key.";
+"Use an API key with user_read permission for subscription usage. The command saves a standalone key; a selected API key account takes priority." = "Use an API key with user_read permission for subscription usage. The command saves a standalone key; a selected API key account takes priority.";
+"Web" = "Web";
+"Credits per million tokens" = "Credits per million tokens";
+"Paused during grace period" = "Paused during grace period";
+"Google Developer Program exposes the current monthly Cloud credit, not local token cost history." = "Google Developer Program exposes the current monthly Cloud credit, not local token cost history.";
+"Paste a me.developers.google.com Cookie header from a signed-in Google account." = "Paste a me.developers.google.com Cookie header from a signed-in Google account.";
+"Billing account" = "Billing account";
+"Granted" = "Granted";
+"Not applied" = "Not applied";
+"%@ of %@ left" = "%@ of %@ left";
+"No Cloud credit found. Check your Google Developer Program benefits." = "No Cloud credit found. Check your Google Developer Program benefits.";
+"Google Developer Program" = "Google Developer Program";
+"Browser session" = "Browser session";
+"Google Developer Program is rate limiting requests. Try again later." = "Google Developer Program is rate limiting requests. Try again later.";
+"Google Developer Program request failed. Try refreshing later." = "Google Developer Program request failed. Try refreshing later.";
+"Google Developer Program returned an unrecognized response. Update CodexBar and try again." = "Google Developer Program returned an unrecognized response. Update CodexBar and try again.";
+"Google session expired or invalid." = "Google session expired or invalid.";
+"No Google Developer Program session cookies found. Sign in at me.developers.google.com/benefits or paste a Cookie header." = "No Google Developer Program session cookies found. Sign in at me.developers.google.com/benefits or paste a Cookie header.";
+
+"Enterprise" = "Enterprise";
+"Personal credits" = "Personal credits";
+"Standard remaining" = "Standard remaining";
+"Select remaining" = "Select remaining";
+"Remaining credits" = "Remaining credits";
+"Notion Credits" = "Notion Credits";
+"Notion did not provide usable personal AI allowances for this workspace. Check AI usage for the selected workspace in Notion, then refresh CodexBar again." = "Notion did not provide usable personal AI allowances for this workspace. Check AI usage for the selected workspace in Notion, then refresh CodexBar again.";
+"Select" = "Select";
+"TrustedRouter" = "TrustedRouter";
+"Show TrustedRouter usage" = "Show TrustedRouter usage";
+"TrustedRouter is rate limiting requests. Try again later." = "TrustedRouter is rate limiting requests. Try again later.";
+"TrustedRouter request failed. Try refreshing later." = "TrustedRouter request failed. Try refreshing later.";
+"TrustedRouter returned an unrecognized response. Update CodexBar and try again." = "TrustedRouter returned an unrecognized response. Update CodexBar and try again.";
+"MiMo returned an unrecognized response. Update CodexBar and try again." = "MiMo returned an unrecognized response. Update CodexBar and try again.";
+"China mainland" = "China mainland";
+"Singapore" = "Singapore";
+"MiMo is rate limiting requests. Try again later." = "MiMo is rate limiting requests. Try again later.";
+"MiMo request failed. Try refreshing later." = "MiMo request failed. Try refreshing later.";
+"Skip cost refresh" = "Skip cost refresh";
+
+/* CLIProxyAPI */
+"Track CLIProxyAPI spend" = "Track CLIProxyAPI spend";
+"Management key" = "Management key";
+"CLIProxyAPI remote-management secret-key. Also CLIPROXYAPI_MANAGEMENT_KEY." = "CLIProxyAPI remote-management secret-key. Also CLIPROXYAPI_MANAGEMENT_KEY.";
+"management key…" = "management key…";
+"Defaults to http://127.0.0.1:8317. HTTPS required except loopback/private-network HTTP." = "Defaults to http://127.0.0.1:8317. HTTPS required except loopback/private-network HTTP.";
+"http://127.0.0.1:8317" = "http://127.0.0.1:8317";
+"auth_index (optional)" = "auth_index (optional)";
+"Limit refresh to one credential. Empty scans Codex, Gemini, Antigravity, and Grok." = "Limit refresh to one credential. Empty scans Codex, Gemini, Antigravity, and Grok.";
+"auth_index…" = "auth_index…";
+"Reads Codex, Gemini, Antigravity, and Grok quota through CLIProxyAPI api-call." = "Reads Codex, Gemini, Antigravity, and Grok quota through CLIProxyAPI api-call.";

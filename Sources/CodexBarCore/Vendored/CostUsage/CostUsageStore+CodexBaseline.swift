@@ -161,11 +161,15 @@ extension CostUsageStore {
         let recorder = self.scopedReadWorkRecorderForTesting
         let snapshot = try Self.readSnapshot(
             database,
+            home: self.home,
             loadTokenSnapshots: loadTokenSnapshots,
             loadUsageRows: false,
             nativeOnly: true,
             recorder: recorder)
-        let rows = try Self.readDecodedCodexUsageRows(database, files: snapshot.files, recorder: recorder)
+        let rows = try Self.readDecodedCodexUsageRows(
+            database,
+            home: self.home,
+            recorder: recorder)
         return (snapshot, rows)
     }
 
@@ -199,7 +203,7 @@ extension CostUsageStore {
         self.currentDatabaseStamp() == baseline.stamp
     }
 
-    /// Retention may rewrite identical metadata when a protected window exceeds the budget.
+    /// Retention may prune history or change its window bounds.
     /// Only those own writes permit a fresh locked semantic comparison; external changes retry.
     func codexBaselineAfterRetention(_ baseline: CodexDecodedBaseline) -> CodexDecodedBaseline? {
         self.withDatabase(default: nil) { database in

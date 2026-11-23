@@ -40,7 +40,7 @@ public enum CLIProxyAPIProviderDescriptor {
             id: .cliproxyapi,
             credentials: self.credentials,
             config: ProviderConfigCapabilities(
-                workspaceIDValidationOrder: 7,
+                workspaceIDValidationOrder: 10,
                 supportsEnterpriseHost: true),
             metadata: ProviderMetadata(
                 id: .cliproxyapi,

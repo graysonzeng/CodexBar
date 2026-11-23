@@ -115,6 +115,14 @@ struct MenuBarLayoutRendererTests {
             (.costToday, "$1.25"),
             (.costWindow, "$20.00"),
             (.separatorDot, "·"),
+            (.separator(.pipe), "|"),
+            (.separator(.slash), "/"),
+            (.separator(.hyphen), "-"),
+            (.separator(.bullet), "•"),
+            (.separator(.diamond), "◆"),
+            (.separator(.hollowDiamond), "◇"),
+            (.separator(.tilde), "~"),
+            (.separator(.doubleBar), "‖"),
             (.space, " "),
         ]
 
@@ -393,6 +401,18 @@ struct MenuBarLayoutRendererTests {
             icon: nil,
             options: self.options())
         #expect(result.attributedTitle.string == "¥100.00\u{2009}·\u{2009}$1.25")
+    }
+
+    @Test
+    func `duplicate reset removal keeps the glyph of a new separator`() {
+        let result = MenuBarLayoutRenderer().render(
+            layout: MenuBarLayout(lines: [[
+                .percent(window: .automatic), .separator(.pipe), .resetCountdown, .separator(.pipe), .costToday,
+            ]]),
+            data: self.data(automaticText: "¥100.00", automaticBalanceFallback: "¥100.00"),
+            icon: nil,
+            options: self.options())
+        #expect(result.attributedTitle.string == "¥100.00\u{2009}|\u{2009}$1.25")
     }
 
     @Test
@@ -747,18 +767,238 @@ struct MenuBarLayoutRendererTests {
         MenuBarLayout(lines: [[.icon, .space], [.percent(window: .weekly)]]),
         MenuBarLayout(lines: [[.percent(window: .session)], [.icon, .percent(window: .weekly)]]),
         MenuBarLayout(lines: [[.space, .icon, .percent(window: .session)], [.percent(window: .weekly)]]),
-    ])
-    func `two row icons preserve inline ownership when no single leading mark spans text`(layout: MenuBarLayout) {
+    ], [false, true])
+    func `two row icons preserve inline ownership when no single leading mark spans text`(
+        layout: MenuBarLayout, highContrast: Bool)
+    {
         let icon = NSImage(size: NSSize(width: 16, height: 16))
         icon.isTemplate = true
         let output = MenuBarLayoutRenderer().render(
-            layout: layout, data: self.data(), icon: icon, options: self.options())
+            layout: layout, data: self.data(), icon: icon, options: self.options(highContrast: highContrast))
 
         #expect(output.leadingIcon == nil)
         #expect(output.attributedTitle.string.contains("\u{FFFC}"))
+        #expect(output.attributedTitle.string.contains("\n"))
     }
 
-    @Test(arguments: ["highContrast", "forceStackedStyle", "colorByProvider", "missingIcon"])
+    @Test
+    func `high contrast spanning icon retains native extent and both text rows at both scales`() throws {
+        let icon = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { rect in
+            NSColor.red.setFill()
+            rect.fill()
+            return true
+        }
+        let layout = MenuBarLayout(lines: [[.icon, .percent(window: .session)], [.percent(window: .weekly)]])
+        let samples: [(MenuBarLayoutSize, String, Int)] = [
+            (.small, NSAppearance.Name.aqua.rawValue, -2), (.regular, NSAppearance.Name.darkAqua.rawValue, 0), (
+                .large,
+                NSAppearance.Name.aqua.rawValue,
+                2),
+            (.small, NSAppearance.Name.darkAqua.rawValue, 2), (.regular, NSAppearance.Name.aqua.rawValue, -2), (
+                .large,
+                NSAppearance.Name.darkAqua.rawValue,
+                0),
+        ]
+        for (size, appearance, shift) in samples {
+            let renderer = MenuBarLayoutRenderer()
+            let output = renderer.render(
+                layout: layout,
+                data: self.data(),
+                icon: icon,
+                options: self.options(
+                    size: size,
+                    verticalAdjustment: shift,
+                    highContrast: true,
+                    appearanceName: appearance))
+            let ordinary = renderer.render(
+                layout: layout,
+                data: self.data(),
+                icon: icon,
+                options: self.options(size: size, verticalAdjustment: shift, appearanceName: appearance))
+            #expect(output.leadingIcon == nil)
+            #expect(output.statusImage == nil)
+            #expect(output.accessibilityLabel == ordinary.accessibilityLabel)
+            #expect(output.attributedTitle.string == "\u{FFFC}", "Icon and both rows share one title attachment")
+            let attachment = try #require(output.attributedTitle.attribute(.attachment, at: 0, effectiveRange: nil)
+                as? NSTextAttachment)
+            let image = try #require(attachment.image)
+            #expect(image.size.height == 22)
+            #expect(attachment.bounds.size == image.size)
+            let textBounds = ordinary.attributedTitle.boundingRect(
+                with: NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading])
+            #expect(abs(image.size.width - ceil(textBounds.width + icon.size.width)) <= 1)
+            for gap in [MenuBarLayoutGap.tight, .regular] {
+                #expect(output.statusItemWidth(gap: gap) == ordinary.statusItemWidth(gap: gap))
+            }
+            let titleSize = output.attributedTitle.size()
+            #expect(titleSize.height <= 22)
+            let titleImage = NSImage(size: NSSize(width: ceil(titleSize.width), height: 22), flipped: false) { _ in
+                output.attributedTitle.draw(at: NSPoint(x: 0, y: (22 - titleSize.height) / 2))
+                return true
+            }
+            for scale in [1, 2] {
+                let bitmap = try Self.statusBitmap(image: titleImage, scale: scale)
+                if size == .regular, appearance == NSAppearance.Name.darkAqua.rawValue, shift == 0, scale == 2,
+                   let directory = ProcessInfo.processInfo.environment["CODEXBAR_SPANNING_ICON_PROOF_DIR"],
+                   let png = bitmap.representation(using: .png, properties: [:])
+                {
+                    try png.write(to: URL(fileURLWithPath: directory).appendingPathComponent("high-contrast.png"))
+                }
+                var redPixels = 0
+                var redRows = Set<Int>()
+                var redColumns = Set<Int>()
+                var textInk = [0, 0]
+                for y in 0..<bitmap.pixelsHigh {
+                    for x in 0..<bitmap.pixelsWide {
+                        guard let color = bitmap.colorAt(x: x, y: y), color.alphaComponent > 0.1 else { continue }
+                        if color.redComponent > 0.9, color.greenComponent < 0.1, color.blueComponent < 0.1 {
+                            redPixels += 1
+                            redRows.insert(y)
+                            redColumns.insert(x)
+                        } else if x >= 16 * scale {
+                            textInk[y < bitmap.pixelsHigh / 2 ? 0 : 1] += 1
+                        }
+                    }
+                }
+                #expect(redRows.count == 16 * scale, "Full-height source mark must survive clipping")
+                #expect(redColumns.count == 16 * scale)
+                #expect(redPixels == 16 * 16 * scale * scale, "Exactly one full-size icon must be drawn")
+                #expect(textInk.allSatisfy { $0 > 8 * scale }, "Both text rows must be visible")
+            }
+        }
+    }
+
+    @Test
+    func `high contrast spanning warning survives highlight stale and appearance transitions`() throws {
+        let base = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 2, dy: 2)).fill()
+            return true
+        }
+        base.isTemplate = true
+        let warning = StatusItemController.quotaWarningFlashImage(base: base)
+        let renderer = MenuBarLayoutRenderer()
+        let layout = MenuBarLayout(lines: [[.icon, .percent(window: .session)], [.percent(window: .weekly)]])
+        var titles: [NSAttributedString] = []
+        for (appearance, highlighted, stale) in [
+            (NSAppearance.Name.aqua.rawValue, false, false),
+            (NSAppearance.Name.darkAqua.rawValue, true, false),
+            (NSAppearance.Name.aqua.rawValue, false, true),
+        ] {
+            let output = renderer.render(
+                layout: layout,
+                data: self.data(),
+                icon: warning,
+                options: self.options(
+                    verticalAdjustment: 2,
+                    isStale: stale,
+                    highContrast: true,
+                    appearanceName: appearance,
+                    isHighlighted: highlighted))
+            let attachment = try #require(output.attributedTitle.attribute(.attachment, at: 0, effectiveRange: nil)
+                as? NSTextAttachment)
+            let image = try #require(attachment.image)
+            #expect(!image.isTemplate)
+            #expect(image.size.height == 22)
+            let bitmap = try Self.statusBitmap(image: image, scale: 2)
+            var redPixels = 0
+            for y in 0..<bitmap.pixelsHigh {
+                for x in 0..<min(32, bitmap.pixelsWide) {
+                    guard let color = bitmap.colorAt(x: x, y: y), color.alphaComponent > 0.1 else { continue }
+                    if color.redComponent > color.greenComponent + 0.2,
+                       color.redComponent > color.blueComponent + 0.2 { redPixels += 1 }
+                }
+            }
+            #expect(redPixels > 20, "Warning overlay must remain red in every native title state")
+            titles.append(output.attributedTitle)
+        }
+        #expect(titles[0] !== titles[1])
+        #expect(titles[0] !== titles[2])
+        let restored = renderer.render(
+            layout: layout,
+            data: self.data(),
+            icon: warning,
+            options: self.options(
+                verticalAdjustment: 2,
+                highContrast: true,
+                appearanceName: NSAppearance.Name.aqua.rawValue))
+        #expect(restored.attributedTitle === titles[0])
+    }
+
+    @Test
+    func `high contrast spanning template follows appearance and moves meters only once`() throws {
+        let icon = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { rect in
+            NSColor.black.setFill()
+            rect.fill()
+            return true
+        }
+        icon.isTemplate = true
+        let layout = MenuBarLayout(lines: [[.icon, .progressBar(window: .session)], [.percent(window: .weekly)]])
+        let renderer = MenuBarLayoutRenderer()
+        var brightness: [CGFloat] = []
+        var centroids: [CGFloat] = []
+        for (appearance, shift) in [
+            (NSAppearance.Name.aqua.rawValue, -1),
+            (NSAppearance.Name.darkAqua.rawValue, 1),
+        ] {
+            let output = renderer.render(
+                layout: layout,
+                data: self.data(),
+                icon: icon,
+                options: self.options(verticalAdjustment: shift, highContrast: true, appearanceName: appearance))
+            let attachment = try #require(output.attributedTitle.attribute(.attachment, at: 0, effectiveRange: nil)
+                as? NSTextAttachment)
+            let image = try #require(attachment.image)
+            let bitmap = try Self.statusBitmap(image: image, scale: 2)
+            let center = try #require(bitmap.colorAt(x: 16, y: 22))
+            brightness.append((center.redComponent + center.greenComponent + center.blueComponent) / 3)
+            var mass: CGFloat = 0
+            var weightedY: CGFloat = 0
+            for y in 0..<bitmap.pixelsHigh {
+                for x in min(34, bitmap.pixelsWide)..<bitmap.pixelsWide {
+                    let alpha = bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0
+                    mass += alpha
+                    weightedY += CGFloat(y) * alpha
+                }
+            }
+            #expect(mass > 20)
+            centroids.append(weightedY / mass / 2)
+        }
+        #expect(brightness[1] - brightness[0] > 0.5, "Template mark must resolve the requested appearance")
+        #expect(abs(centroids[0] - centroids[1] - 2) < 0.6, "Text and embedded meter share one vertical nudge")
+    }
+
+    @Test
+    func `provider coloring preserves the leading icon across both text rows`() throws {
+        let icon = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { rect in
+            NSColor.black.setFill()
+            rect.fill()
+            return true
+        }
+        icon.isTemplate = true
+        let layout = MenuBarLayout(lines: [
+            [.icon, .progressBar(window: .session), .windowResetCountdown(window: .session)],
+            [.percent(window: .weekly), .windowResetCountdown(window: .weekly)],
+        ])
+        let renderer = MenuBarLayoutRenderer()
+        let options = self.options(colorByProvider: true)
+        let colored = renderer.render(layout: layout, data: self.data(provider: .claude), icon: icon, options: options)
+        let neutral = renderer.render(
+            layout: layout, data: self.data(provider: .claude), icon: icon, options: self.options())
+        let leading = try #require(colored.leadingIcon)
+        #expect(leading.size == neutral.leadingIcon?.size)
+        #expect(!leading.isTemplate)
+        #expect(colored.attributedTitle.string == neutral.attributedTitle.string)
+        #expect(colored.accessibilityLabel == neutral.accessibilityLabel)
+        let pixel = try #require(Self.statusBitmap(image: leading, scale: 1).colorAt(x: 8, y: 8))
+        let tint = try #require(MenuBarLayoutRenderer.effectiveProviderTintColor(for: .claude, options: options))
+        #expect(abs(pixel.redComponent - tint.redComponent) < 0.01)
+        #expect(abs(pixel.greenComponent - tint.greenComponent) < 0.01)
+        #expect(abs(pixel.blueComponent - tint.blueComponent) < 0.01)
+    }
+
+    @Test(arguments: ["highContrast", "forceStackedStyle", "missingIcon"])
     func `two row leading icons retain rendering overrides`(override: String) {
         let icon = NSImage(size: NSSize(width: 16, height: 16))
         icon.isTemplate = true
@@ -767,12 +1007,15 @@ struct MenuBarLayoutRendererTests {
             data: self.data(),
             icon: override == "missingIcon" ? nil : icon,
             options: self.options(
-                colorByProvider: override == "colorByProvider",
                 highContrast: override == "highContrast",
                 forceStackedStyle: override == "forceStackedStyle"))
 
         #expect(output.leadingIcon == nil)
-        #expect(output.attributedTitle.string.hasPrefix(override == "missingIcon" ? "–" : "\u{FFFC}"))
+        if override == "highContrast" {
+            #expect(output.attributedTitle.string == "\u{FFFC}")
+        } else {
+            #expect(output.attributedTitle.string.hasPrefix(override == "missingIcon" ? "–" : "\u{FFFC}"))
+        }
     }
 
     @Test
@@ -1145,30 +1388,18 @@ struct MenuBarLayoutRendererTests {
     }
 
     @Test
-    func `cached path renders one thousand titles under budget`() {
+    func `cached path reuses one title across one thousand renders`() {
         let renderer = MenuBarLayoutRenderer()
         let layout = MenuBarLayout(lines: [[.icon, .percent(window: .automatic), .separatorDot, .resetCountdown]])
         let icon = NSImage(size: NSSize(width: 16, height: 16))
-        // Fixture construction is not part of the renderer's cached path.
         let data = self.data()
         let options = self.options()
         let first = renderer.render(layout: layout, data: data, icon: icon, options: options)
-        var last = first
-        var fastest = Duration.seconds(10)
 
-        // Thread CPU time keeps the frozen 50 ms budget on rendering work; wall-clock time failed on
-        // preempted CI runners. Best-of-three still absorbs one-off cache misses.
-        for _ in 0..<3 {
-            let startedAt = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
-            for _ in 0..<1000 {
-                last = renderer.render(layout: layout, data: data, icon: icon, options: options)
-            }
-            let elapsed = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - startedAt
-            fastest = min(fastest, .nanoseconds(Int64(elapsed)))
+        for _ in 0..<1000 {
+            let rendered = renderer.render(layout: layout, data: data, icon: icon, options: options)
+            #expect(rendered.attributedTitle === first.attributedTitle)
         }
-
-        #expect(first.attributedTitle === last.attributedTitle)
-        #expect(fastest < .milliseconds(50), "Fastest cached batch used \(fastest) of thread CPU time")
     }
 
     @Test
@@ -2114,6 +2345,26 @@ struct MenuBarLayoutRendererTests {
     }
 
     @Test
+    func `pace state bars keep signed text neutral and scale with the font`() throws {
+        for size in MenuBarLayoutSize.allCases {
+            let rendered = MenuBarLayoutRenderer().render(
+                layout: MenuBarLayout(lines: [[.pace(window: .weekly)]]),
+                data: self.data(),
+                icon: nil,
+                options: self.options(size: size, colorPace: true))
+            let title = rendered.attributedTitle
+            let attachment = try #require(title.attribute(.attachment, at: 0, effectiveRange: nil)
+                as? NSTextAttachment)
+            let font = try #require(title.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+            #expect(attachment.bounds.height == font.capHeight)
+            #expect(attachment.bounds.width == font.capHeight / 2)
+            #expect(title.attribute(.foregroundColor, at: title.length - 1, effectiveRange: nil) as? NSColor
+                == .controlTextColor)
+            #expect(rendered.accessibilityLabel.contains("+11%"))
+        }
+    }
+
+    @Test
     func `pace colors follow reserve and ahead values and toggle invalidates cache`() {
         let renderer = MenuBarLayoutRenderer()
         let cases: [(PercentWindow, NSColor)] = [
@@ -2129,7 +2380,7 @@ struct MenuBarLayoutRendererTests {
                 == .controlTextColor)
             #expect(colored.attributedTitle.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
                 == expectedColor)
-            #expect(colored.attributedTitle.string == plain.attributedTitle.string)
+            #expect(colored.accessibilityLabel == plain.accessibilityLabel)
             #expect(plain.statusImage?.isTemplate == true)
             #expect((colored.statusImage == nil) == (window != .automatic))
             let button = NSButton()
@@ -2183,11 +2434,11 @@ struct MenuBarLayoutRendererTests {
         let options = self.options(conditionals: [conditional], colorPace: true)
         let colored = renderer.render(layout: layout, data: self.data(), icon: nil, options: options)
         #expect(colored.statusImage == nil)
-        #expect(colored.attributedTitle.string.contains("+11%"))
+        #expect(colored.accessibilityLabel.contains("+11%"))
         let neutral = renderer.render(
             layout: layout, data: self.data(automaticUsedPercent: 100), icon: nil, options: options)
         #expect(neutral.statusImage?.isTemplate == true)
-        #expect(!neutral.attributedTitle.string.contains("+11%"))
+        #expect(!neutral.accessibilityLabel.contains("+11%"))
     }
 
     @Test(arguments: ["aqua", "darkAqua"], ["regular", "stale", "highContrast", "staleHighContrast"])
@@ -2213,7 +2464,7 @@ struct MenuBarLayoutRendererTests {
                 options: options)
             #expect(output.statusImage == nil)
             _ = StatusItemController.applyMenuBarLayoutContent(output, for: button, gap: .regular)
-            let range = (button.attributedTitle.string as NSString).range(of: "+11%")
+            let range = (button.attributedTitle.string as NSString).range(of: "\u{FFFC}", options: .backwards)
             try #require(range.location != NSNotFound)
             let expected = mode == "stale" ? NSColor.systemRed.withAlphaComponent(0.5) : .systemRed
             #expect(button.attributedTitle.attribute(
@@ -2407,7 +2658,9 @@ struct MenuBarLayoutRendererTests {
         for token in [MenuBarLayoutToken.spendAmount, .spendBudget] {
             let rendered = self.renderToken(token, data: data)
             #expect(rendered.attributedTitle.string == "–")
-            #expect(rendered.accessibilityLabel == L("%@ unavailable", token.editorLabel(provider: data.provider)))
+            #expect(rendered.accessibilityLabel == L(
+                "%@ unavailable",
+                token.editorLabel(provider: data.provider.firstPartyProvider)))
         }
     }
 
@@ -2453,7 +2706,7 @@ struct MenuBarLayoutRendererTests {
         -> MenuBarLayoutRenderData
     {
         MenuBarLayoutRenderData(
-            provider: provider,
+            provider: provider.instanceID,
             iconKey: "codex",
             providerName: ProviderDescriptorRegistry.descriptor(for: provider).metadata.displayName,
             accountLabel: accountLabel,

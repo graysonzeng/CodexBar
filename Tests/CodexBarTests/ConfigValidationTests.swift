@@ -330,6 +330,10 @@ struct ConfigValidationTests {
         }))
 
         #expect(issue.severity == .warning)
+        #expect(issue.message ==
+            "enterpriseHost is set but only aixy, azureopenai, bifrost, clawrouter, cliproxyapi, copilot, kimi, " +
+            "litellm, llmman, llmproxy, openrouter, siliconflow, sub2api, and wayfinder " +
+            "support enterpriseHost.")
     }
 
     @Test
@@ -385,7 +389,7 @@ struct ConfigValidationTests {
         let issue = issues.first { $0.provider == .gemini && $0.code == "workspace_unused" }
         let expectedMessage =
             "workspaceID is set but only azureopenai, openai, opencode, opencodego, devin, deepgram, " +
-            "xai, gitkraken, muse, and vercel support workspaceID."
+            "xai, gitkraken, muse, vercel, and cliproxyapi support workspaceID."
         #expect(issue?.message == expectedMessage)
     }
 

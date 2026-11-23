@@ -8,6 +8,15 @@ import Darwin
 #endif
 
 extension CostUsageScanner {
+    /// Source qualification only. The collecting machine decides whether custom rates override it.
+    static func codexAutoReviewIsIncludedInPlan(
+        model: String, timestampUnixMs: Int64?, hasCreatorAccount: Bool) -> Bool
+    {
+        hasCreatorAccount
+            && timestampUnixMs.map { $0 >= 1_791_270_000_000 } == true // 2026-10-06 00:00 PDT.
+            && CostUsagePricing.normalizeCodexModel(model) == "codex-auto-review"
+    }
+
     static func codexReportDayKeys(cache: CostUsageCache, range: CostUsageDayRange) -> [String] {
         cache.days.keys.sorted().filter {
             CostUsageDayRange.isInRange(dayKey: $0, since: range.sinceKey, until: range.untilKey)
@@ -17,6 +26,9 @@ extension CostUsageScanner {
     struct CodexRowCostBreakdown {
         var standardCostUSD: Double = 0
         var priorityCostUSD: Double = 0
+        var ultrafastCostUSD: Double = 0
+        var ultrafastTokens = 0
+        var sawUltrafastCost = false
         var standardTokens: Int = 0
         var priorityTokens: Int = 0
         var sawStandardCost = false
@@ -45,8 +57,8 @@ extension CostUsageScanner {
         }
 
         var totalCostUSD: Double? {
-            guard self.sawStandardCost || self.sawPriorityCost else { return nil }
-            return self.standardCostUSD + self.priorityCostUSD
+            guard self.sawStandardCost || self.sawPriorityCost || self.sawUltrafastCost else { return nil }
+            return self.standardCostUSD + self.priorityCostUSD + self.ultrafastCostUSD
         }
 
         var hasModeSplit: Bool {
@@ -55,11 +67,9 @@ extension CostUsageScanner {
 
         /// The rows account for exactly the group's billed tokens, so their per-request costs describe it.
         func coversGroup(canonicalTotalTokens: Int) -> Bool {
-            let (rowTokenTotal, overflow) = self.standardTokens.addingReportingOverflow(self.priorityTokens)
-            return !self.hasUnstableTokenRows
-                && !self.hasTokenOverflow
-                && !overflow
-                && rowTokenTotal == canonicalTotalTokens
+            !self.hasUnstableTokenRows && !self.hasTokenOverflow
+                && CheckedSum.integers([self.standardTokens, self.priorityTokens, self.ultrafastTokens])
+                == canonicalTotalTokens
         }
     }
 
@@ -87,7 +97,11 @@ extension CostUsageScanner {
             }
             let priorityMetadata = row.turnID.flatMap { priorityTurns[$0] }
             let isPriority = priorityMetadata != nil || row.pricingMode == "priority"
-            if isPriority {
+            if row.pricingMode == "ultrafast" {
+                let (total, overflow) = breakdown.ultrafastTokens.addingReportingOverflow(tokenCount)
+                breakdown.ultrafastTokens = overflow ? breakdown.ultrafastTokens : total
+                breakdown.hasTokenOverflow = breakdown.hasTokenOverflow || overflow
+            } else if isPriority {
                 let (total, overflow) = breakdown.priorityTokens.addingReportingOverflow(tokenCount)
                 breakdown.priorityTokens = overflow ? breakdown.priorityTokens : total
                 breakdown.hasTokenOverflow = breakdown.hasTokenOverflow || overflow
@@ -110,7 +124,10 @@ extension CostUsageScanner {
                 continue
             }
             if hasTokens { breakdown.pricedRequestCount += 1 }
-            if isPriority {
+            if row.pricingMode == "ultrafast" {
+                breakdown.ultrafastCostUSD += cost
+                breakdown.sawUltrafastCost = true
+            } else if isPriority {
                 breakdown.priorityCostUSD += cost
                 breakdown.sawPriorityCost = true
             } else {
@@ -140,7 +157,8 @@ extension CostUsageScanner {
         let hasPriorityTokens = !(usage.codexPriorityTokens?.isEmpty ?? true)
 
         // Token maps are also the completion marker for models with no known pricing.
-        guard hasStandardTokens || hasPriorityTokens else { return true }
+        guard hasStandardTokens || hasPriorityTokens
+            || usage.codexRows?.contains(where: { $0.pricingMode == "ultrafast" }) == true else { return true }
         return (hasStandardCost && !hasStandardTokens) || (hasPriorityCost && !hasPriorityTokens)
     }
 
@@ -206,6 +224,10 @@ extension CostUsageScanner {
                 row.pricingModel = row.pricingModel ?? previous.pricingModel
                 row.pricingMode = row.pricingMode ?? previous.pricingMode
             }
+            if row.pricingMode == "ultrafast" {
+                row.pricingModel = row.pricingModel ?? row.model
+                return row
+            }
             let priorityMetadata = row.turnID.flatMap { priorityTurns[$0] }
             let isPriority = priorityMetadata != nil || row.pricingMode == "priority"
             row.pricingModel = priorityMetadata.map { Self.codexPriorityPricingModel(for: row, priorityMetadata: $0) }
@@ -246,6 +268,7 @@ extension CostUsageScanner {
             guard CostUsageDayRange.isInRange(dayKey: row.day, since: range.sinceKey, until: range.untilKey)
             else { continue }
 
+            guard row.pricingMode != "ultrafast" else { continue }
             guard let tokenCount = CheckedSum.integers([row.input, row.output]) else { return (nil, nil) }
             let priorityMetadata = row.turnID.flatMap { priorityTurns[$0] }
             let isPriority = priorityMetadata != nil || row.pricingMode == "priority"
@@ -1147,7 +1170,7 @@ extension CostUsageScanner {
     {
         guard isForceRescan else { return }
         for key in cache.files.keys {
-            guard let old = cache.files[key] else { continue }
+            guard let old = cache.files[key], old.codexArchived != true else { continue }
             guard !old.touchesCodexScanWindow(
                 sinceKey: range.scanSinceKey,
                 untilKey: range.scanUntilKey,
@@ -1206,8 +1229,10 @@ extension CostUsageScanner {
         for (path, usage) in reportCache.files where usage.codexSession?.hasCreatorAccount == true {
             for (index, row) in (usage.codexRows ?? []).enumerated() {
                 guard row.knownCostNanos == nil, row.eventIndex != nil, (row.unpricedTokens ?? 0) == 0,
-                      let timestamp = row.timestampUnixMs, timestamp >= 1_791_270_000_000, // 2026-10-06 00:00 PDT.
-                      CostUsagePricing.normalizeCodexModel(row.model) == "codex-auto-review",
+                      Self.codexAutoReviewIsIncludedInPlan(
+                          model: row.model,
+                          timestampUnixMs: row.timestampUnixMs,
+                          hasCreatorAccount: usage.codexSession?.hasCreatorAccount == true),
                       customPricing.rates(
                           providerID: CostUsagePricing.codexModelsDevProviderID,
                           model: Self.codexPricedModel(for: row, priorityTurns: priorityTurns)) == nil

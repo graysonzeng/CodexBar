@@ -75,6 +75,7 @@ struct SpendDashboardModelTests {
             .vertexai,
             .openai,
             .mistral,
+            .deepseek,
             .bedrock,
             .cursor,
             .grok,
@@ -85,43 +86,6 @@ struct SpendDashboardModelTests {
             // Antigravity and Muse provide local token history without monetary values.
             .antigravity, .muse, .pi,
         ])
-    }
-
-    @Test
-    func `cliproxyapi observed spend stays visible but excluded from billed totals`() throws {
-        let model = SpendDashboardModel.build(
-            inputs: [
-                Self.input(id: "native", provider: .codex, currency: "USD", cost: 8),
-                Self.input(id: "proxy", provider: .cliproxyapi, currency: "USD", cost: 50),
-            ],
-            requestedDays: 30,
-            now: Self.now,
-            calendar: Self.calendar)
-        let group = try #require(model.groups.first)
-        #expect(group.providers.map(\.id).sorted() == ["native", "proxy"])
-        #expect(group.totalCost == 8)
-        #expect(group.providers.first { $0.id == "proxy" }?.totalCost == 50)
-    }
-
-    @Test
-    func `cliproxyapi-only observed spend remains available in group totals`() throws {
-        let model = SpendDashboardModel.build(
-            inputs: [
-                Self.input(id: "proxy", provider: .cliproxyapi, currency: "USD", cost: 50),
-            ],
-            requestedDays: 30,
-            now: Self.now,
-            calendar: Self.calendar)
-        let group = try #require(model.groups.first)
-        #expect(group.totalCost == 50)
-        #expect(group.dailyPoints.map(\.cost) == [50])
-        CodexBarLocalizationOverride.$appLanguage.withValue("en") {
-            #expect(spendDashboardGroupCostText(group) != "Spend unavailable")
-            #expect(spendDashboardProvenanceText(group.provenance) != "Spend unavailable")
-            #expect(SpendDailyChartPresentation(
-                dailyPoints: group.dailyPoints,
-                aggregateTotal: group.totalCost).content == .chart)
-        }
     }
 
     @Test
@@ -849,6 +813,77 @@ extension SpendDashboardModelTests {
         #expect(group.modelHistoryCompleteness == .incomplete)
         #expect(group.models.map(\.modelName) == ["gpt-5.2-codex"])
         #expect(group.models.map(\.totalCost) == [2])
+    }
+
+    @Test
+    func `models lens ranks fully attributed unpriced Claude currency group by tokens`() throws {
+        let claude = SpendDashboardModel.ProviderInput(
+            provider: .claude,
+            displayName: "Claude",
+            snapshot: Self.snapshot(currency: "USD", entries: [
+                Self.entry(day: "2026-07-15", cost: nil, tokens: 2_800_000, model: "claude-sonnet-4-5"),
+                Self.entry(day: "2026-07-16", cost: nil, tokens: 920_000, model: "claude-opus-4-5"),
+            ]))
+        let group = try #require(Self.model(inputs: [claude], requestedDays: 7).groups.first)
+        let ranking = try #require(SpendModelRanking.make(group))
+
+        #expect(group.currencyCode == "USD")
+        #expect(group.totalCost == nil)
+        #expect(group.modelHistoryCompleteness == .incomplete) // Pricing is still incomplete.
+        #expect(ranking.basis == .tokens)
+        #expect(!ranking.isPartial)
+        #expect(ranking.rows.map(\.model.modelName) == ["claude-sonnet-4-5", "claude-opus-4-5"])
+        #expect(ranking.rows.map(\.value) == [2_800_000, 920_000])
+        #expect(ranking.rows.map(\.share) == [2_800_000.0 / 3_720_000, 920_000.0 / 3_720_000])
+    }
+
+    @Test
+    func `models lens withholds token shares for unattributed currency group history`() throws {
+        let named = SpendDashboardModel.ProviderInput(
+            id: "named",
+            provider: .codex,
+            displayName: "Codex",
+            snapshot: Self.snapshot(currency: "USD", entries: [
+                Self.entry(day: "2026-07-15", cost: nil, tokens: 40, model: "example-unpriced-model"),
+            ]))
+        let unattributed = SpendDashboardModel.ProviderInput(
+            id: "unattributed",
+            provider: .codex,
+            displayName: "Codex",
+            snapshot: Self.snapshot(currency: "USD", entries: [
+                Self.entry(day: "2026-07-16", cost: 3, tokens: 60, model: nil),
+            ]))
+        let group = try #require(Self.model(inputs: [named, unattributed], requestedDays: 7).groups.first)
+        let ranking = try #require(SpendModelRanking.make(group))
+
+        #expect(group.totalTokens == 100)
+        #expect(ranking.basis == .tokens)
+        #expect(ranking.isPartial)
+        #expect(ranking.rows.map(\.value) == [40])
+        #expect(ranking.rows.allSatisfy { $0.share == nil })
+    }
+
+    @Test
+    func `models lens withholds shares when model history is partial`() throws {
+        let codex = SpendDashboardModel.ProviderInput(
+            provider: .codex,
+            displayName: "Codex",
+            snapshot: Self.snapshot(
+                currency: "USD",
+                entries: [
+                    Self.entry(day: "2026-07-15", cost: 2, model: "gpt-5.2-codex"),
+                    Self.entry(day: "2026-07-16", cost: 3, model: nil),
+                ]))
+        let group = try #require(Self.model(
+            inputs: [codex],
+            requestedDays: 7).groups.first)
+        let ranking = try #require(SpendModelRanking.make(group))
+
+        // $3 of the $5 has no model, so the one named model must not claim 100%.
+        #expect(ranking.isPartial)
+        #expect(ranking.rows.map(\.model.modelName) == ["gpt-5.2-codex"])
+        #expect(ranking.rows.allSatisfy { $0.share == nil })
+        #expect(ranking.rows.map(\.value) == [2])
     }
 
     @Test

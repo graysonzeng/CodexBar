@@ -152,6 +152,11 @@ extension UsageStore {
         requestedAccountIDs: Set<String>? = nil) async
     {
         let projection = self.freshCodexVisibleAccountProjectionForAccountRefresh()
+        if let followUpAccount = CodexWeeklyResetConfirmation.followUpAccount,
+           !self.codexWeeklyResetFollowUpMatchesCurrentScope(followUpAccount, projection: projection)
+        {
+            return
+        }
         let accounts = self.limitedCodexVisibleAccounts(
             projection.visibleAccounts.filter { requestedAccountIDs?.contains($0.id) ?? true },
             snapshots: self.codexAccountSnapshots,
@@ -164,12 +169,7 @@ extension UsageStore {
         let managedAccountIDsWithReadableAuthAtStart = self.codexManagedAccountIDsWithReadableAuth()
 
         let originalVisibleAccountID = projection.activeVisibleAccountID
-        let originalSelectionSource = originalVisibleAccountID.flatMap {
-            projection.source(forVisibleAccountID: $0)
-        }
-        let originalVisibleAccount = originalVisibleAccountID.flatMap { id in
-            projection.visibleAccounts.first { $0.id == id }
-        }
+        let originalVisibleAccount = projection.visibleAccounts.first { $0.id == originalVisibleAccountID }
         let priorSnapshots = self.codexAccountSnapshots
         var snapshots: [CodexAccountUsageSnapshot] = []
         var selectedOutcome: ProviderFetchOutcome?
@@ -246,21 +246,27 @@ extension UsageStore {
         let currentSnapshots = Self.codexAccountSnapshots(retained + snapshots, reconciledWith: currentProjection)
         self.codexAccountSnapshots = currentSnapshots
         self.codexAccountUsageSnapshotStore?.store(currentSnapshots)
+        for row in currentSnapshots where fetchedIDs.contains(row.id) {
+            self.scheduleCodexWeeklyResetFollowUp(for: row.account, candidate: row.weeklyResetCandidate)
+        }
 
         // A view-only refresh of a sibling owns its row, not the globally followed presentation.
         if requestedAccountIDs != nil, !accounts.contains(where: \.isActive) { return }
 
-        let selectionStillMatches = self.codexVisibleSelectionStillMatches(
+        guard self.codexVisibleSelectionStillMatches(
             originalVisibleAccountID: originalVisibleAccountID,
-            originalSelectionSource: originalSelectionSource,
+            originalSelectionSource: originalVisibleAccount?.selectionSource,
             originalAccount: originalVisibleAccount,
             currentProjection: currentProjection)
+        else {
+            self.reconcileCodexAccountStateForUsageOwner(self.freshCodexAccountScopedRefreshGuard())
+            return
+        }
         guard let selectedOutcome, let selectedAccount else {
-            if selectionStillMatches, selectedWithheldSuccess {
+            if selectedWithheldSuccess {
                 self.recordCodexWithheldFetchSuccess()
             }
-            if selectionStillMatches,
-               let selectedID = currentProjection.activeVisibleAccountID,
+            if let selectedID = currentProjection.activeVisibleAccountID,
                let preserved = currentSnapshots.first(where: { $0.id == selectedID }),
                let snapshot = preserved.snapshot
             {
@@ -269,13 +275,7 @@ extension UsageStore {
                 let publicationGuard = Self.codexScopedRefreshGuard(for: preserved.account)
                 self.lastCodexUsagePublicationGuard = publicationGuard
                 self.lastCodexAccountScopedRefreshGuard = publicationGuard
-            } else if !selectionStillMatches {
-                self.reconcileCodexAccountStateForUsageOwner(self.freshCodexAccountScopedRefreshGuard())
             }
-            return
-        }
-        guard selectionStillMatches else {
-            self.reconcileCodexAccountStateForUsageOwner(self.freshCodexAccountScopedRefreshGuard())
             return
         }
 
@@ -348,6 +348,7 @@ extension UsageStore {
             CodexVisibleAccountProjection.make(from: snapshot),
             snapshot: snapshot,
             requireLiveManagedAuthFor: accountIDs)
+            .applyingCustomNames(self.settings.codexAccountNames)
     }
 
     private func codexManagedAccountIDsWithReadableAuth() -> Set<UUID> {
@@ -879,6 +880,7 @@ extension UsageStore {
             settings: self.settings,
             account: account)
         let snapshot = ProviderRegistry.makeSettingsSnapshot(
+            provider: provider,
             settings: self.settings,
             tokenOverride: override,
             codexActiveSourceOverride: codexActiveSourceOverride)
@@ -1414,6 +1416,10 @@ extension UsageStore {
                 provider: .codex,
                 snapshot: snapshot,
                 accountDiscriminator: codexOwnerKey?.rawValue)
+            self.handleUpcomingResetWarning(
+                provider: .codex,
+                snapshot: snapshot,
+                accountDiscriminator: codexOwnerKey?.rawValue)
             let sessionRestored = self.handleSessionQuotaTransition(
                 provider: .codex,
                 snapshot: snapshot,
@@ -1497,6 +1503,10 @@ extension UsageStore {
                 from: self.lastKnownResetSnapshots[provider.instanceID])
             let warningAccountDiscriminator = Self.warningTokenAccountDiscriminator(account)
             self.handleQuotaWarningTransitions(
+                provider: provider,
+                snapshot: backfilled,
+                accountDiscriminator: warningAccountDiscriminator)
+            self.handleUpcomingResetWarning(
                 provider: provider,
                 snapshot: backfilled,
                 accountDiscriminator: warningAccountDiscriminator)

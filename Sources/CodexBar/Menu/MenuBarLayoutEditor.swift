@@ -107,6 +107,7 @@ enum MenuBarLayoutPaletteTokens {
         .spendAmount,
         .spendBudget,
         .separatorDot,
+    ] + MenuBarLayoutSeparator.allCases.map(MenuBarLayoutToken.separator) + [
         .space,
         .hidden,
     ]
@@ -137,8 +138,8 @@ enum MenuBarLayoutEditorMutations {
         var targetIndex = min(max(target.index, 0), lines[targetLine].count)
 
         if let source = item.source {
-            guard item.sourceLayout == layout else { return layout }
-            guard lines.indices.contains(source.line),
+            guard item.sourceLayout == layout,
+                  lines.indices.contains(source.line),
                   lines[source.line].indices.contains(source.index),
                   lines[source.line][source.index] == token
             else { return layout }
@@ -373,7 +374,8 @@ struct MenuBarLayoutEditor: View {
             MenuBarLayoutPaletteGroup(
                 id: "structure",
                 title: L("menu_bar_layout_group_structure"),
-                tokens: [.separatorDot, .space],
+                tokens: [.separatorDot] + MenuBarLayoutSeparator.allCases.map(MenuBarLayoutToken.separator)
+                    + [.space],
                 includesLineBreak: true),
         ]
     }
@@ -1028,7 +1030,7 @@ struct MenuBarLayoutPreview: View {
             resetsAt: now.addingTimeInterval(12 * 24 * 60 * 60),
             resetDescription: nil)
         return MenuBarLayoutRenderData(
-            provider: provider,
+            provider: provider.instanceID,
             iconKey: "\(provider.rawValue)-representative",
             providerName: L(self.store.metadata(for: provider).displayName),
             accountLabel: self.settings.hidePersonalInfo ? nil : L("menu_bar_layout_sample_account"),
@@ -1157,20 +1159,28 @@ extension MenuBarLayoutToken {
         if case let .extraPercent(id) = self, let title = MenuBarLayoutNamedExtra.title(id: id) {
             return L("%@ %@", title, "%")
         }
-        if let providerLabel = self.providerEditorLabel(provider: provider) {
+        if let providerLabel = self.providerEditorLabel(provider: provider, snapshot: snapshot) {
             return providerLabel
         }
         return self.defaultEditorLabel
     }
 
-    private func providerEditorLabel(provider: UsageProvider?) -> String? {
+    private func providerEditorLabel(provider: UsageProvider?, snapshot: UsageSnapshot?) -> String? {
         let window: PercentWindow? = switch self {
         case let .percent(window), let .pace(window),
              let .windowResetCountdown(window), let .windowResetAbsolute(window),
              let .progressBar(window): window
         default: nil
         }
-        guard let localizedLabel = window?.providerLabel(provider: provider) else { return nil }
+        guard let window, let provider else { return nil }
+        let preference: MenuBarPercentWindowPreference? = switch window {
+        case .session: .session
+        case .weekly: .weekly
+        case .scopedWeekly, .automatic, .spend: nil
+        }
+        guard let localizedLabel = snapshot == nil
+            ? window.providerLabel(provider: provider)
+            : preference?.label(for: provider, snapshot: snapshot) else { return nil }
         return switch self {
         case .percent: L("%@ %@", localizedLabel, "%")
         case .pace: L("%@ %@", localizedLabel, L("display_mode_pace").lowercased())
@@ -1220,6 +1230,7 @@ extension MenuBarLayoutToken {
         case .spendAmount: L("Spend")
         case .spendBudget: L("menu_bar_layout_token_spend_budget")
         case .separatorDot: "·"
+        case let .separator(separator): separator.glyph
         case .space: L("menu_bar_layout_token_space")
         case .conditional: L("menu_bar_layout_token_conditional")
         case .hidden: L("menu_bar_layout_conditional_hide")
@@ -1250,6 +1261,9 @@ extension MenuBarLayoutToken {
     func editorAccessibilityLabel(provider: UsageProvider?, snapshot: UsageSnapshot? = nil) -> String {
         switch self {
         case .separatorDot: L("menu_bar_layout_token_separator_accessibility")
+        case let .separator(separator): L(
+                "menu_bar_layout_token_separator_glyph_accessibility",
+                separator.accessibilityName)
         default: self.editorLabel(provider: provider, snapshot: snapshot)
         }
     }
@@ -1270,7 +1284,7 @@ extension MenuBarLayoutToken {
         case .tokensSparkline: "chart.bar.xaxis"
         case .costToday, .spendAmount, .spendBudget: "dollarsign.circle"
         case .costWindow: "calendar.badge.clock"
-        case .separatorDot: "smallcircle.filled.circle"
+        case .separatorDot, .separator: "smallcircle.filled.circle"
         case .space: "space"
         case .conditional: "switch.2"
         case .hidden: "eye.slash"

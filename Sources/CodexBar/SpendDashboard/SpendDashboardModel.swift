@@ -27,39 +27,6 @@ struct SpendDashboardModel: Equatable, Sendable {
     }
 
     static let openCodexSourceID = "opencodex"
-    struct ProviderInput: Sendable {
-        let id: String
-        let provider: UsageProvider
-        var displayName: String
-        let modelProviderName: String
-        var snapshot: CostUsageTokenSnapshot
-        var retainedDetailSnapshot: CostUsageTokenSnapshot?
-        let tokenActivityCache: CostUsageTokenActivityCache?
-        let accounting: PiSnapshotAccounting?
-
-        init(
-            id: String? = nil,
-            provider: UsageProvider,
-            displayName: String,
-            modelProviderName: String? = nil,
-            snapshot: CostUsageTokenSnapshot,
-            tokenActivityCache: CostUsageTokenActivityCache? = nil,
-            sourceKind: SpendDashboardModel.SourceKind = .native,
-            accounting: PiSnapshotAccounting? = nil)
-        {
-            self.id = id ?? provider.rawValue
-            self.provider = provider
-            self.displayName = displayName
-            self.modelProviderName = modelProviderName ?? displayName
-            self.snapshot = snapshot
-            self.tokenActivityCache = tokenActivityCache
-            self.sourceKind = sourceKind
-            self.accounting = accounting
-        }
-
-        let sourceKind: SpendDashboardModel.SourceKind
-    }
-
     struct SourceFilterItem: Identifiable, Equatable, Sendable {
         let id: String
         let displayName: String
@@ -68,7 +35,7 @@ struct SpendDashboardModel: Equatable, Sendable {
     struct ProviderRow: Identifiable, Equatable, Sendable {
         let id: String
         let rank: Int
-        let provider: UsageProvider
+        let provider: ProviderInstanceID
         let displayName: String
         let totalTokens: Int?
         let totalCost: Double?
@@ -86,7 +53,7 @@ struct SpendDashboardModel: Equatable, Sendable {
         init(
             id: String,
             rank: Int,
-            provider: UsageProvider,
+            provider: ProviderInstanceID,
             displayName: String,
             totalTokens: Int?,
             totalCost: Double?,
@@ -114,7 +81,7 @@ struct SpendDashboardModel: Equatable, Sendable {
 
     struct ModelRow: Identifiable, Equatable, Sendable {
         let rank: Int
-        let provider: UsageProvider
+        let provider: ProviderInstanceID
         let providerName: String
         let modelName: String
         let totalTokens: Int?
@@ -129,7 +96,7 @@ struct SpendDashboardModel: Equatable, Sendable {
 
         init(
             rank: Int,
-            provider: UsageProvider,
+            provider: ProviderInstanceID,
             providerName: String,
             modelName: String,
             totalTokens: Int?,
@@ -152,7 +119,7 @@ struct SpendDashboardModel: Equatable, Sendable {
     /// the same repository used under two Codex accounts stays attributed to each subscription.
     struct ProjectRow: Identifiable, Equatable, Sendable {
         var rank: Int
-        let provider: UsageProvider
+        let provider: ProviderInstanceID
         let providerName: String
         let sourceID: String
         let projectName: String
@@ -168,7 +135,7 @@ struct SpendDashboardModel: Equatable, Sendable {
 
     struct DailyPoint: Identifiable, Equatable, Sendable {
         let sourceID: String
-        let provider: UsageProvider
+        let provider: ProviderInstanceID
         let providerName: String
         let day: Date
         let cost: Double
@@ -185,7 +152,7 @@ struct SpendDashboardModel: Equatable, Sendable {
         var costIsLowerBound = false
         var countsAreLowerBound = false
         let sourceID: String
-        let provider: UsageProvider
+        let provider: ProviderInstanceID
         let displayName: String
         let totalTokens: Int?
         let requestCount: Int?
@@ -256,11 +223,6 @@ struct SpendDashboardModel: Equatable, Sendable {
         }
     }
 
-    enum ModelHistoryCompleteness: Equatable, Sendable {
-        case complete
-        case incomplete
-    }
-
     struct CurrencyGroup: Identifiable, Equatable, Sendable {
         let currencyCode: String
         let providers: [ProviderRow]
@@ -272,7 +234,8 @@ struct SpendDashboardModel: Equatable, Sendable {
         let coveredDayCount: Int
         let chartDomain: ClosedRange<Date>
         let modelHistoryCompleteness: ModelHistoryCompleteness
-        let incompleteModelProviders: Set<UsageProvider>
+        let modelTokenAttributionCompleteness: ModelHistoryCompleteness
+        let incompleteModelProviders: Set<ProviderInstanceID>
         let tokenMix: CostUsageTokenMix
         let coverageAccumulator: CostUsageCoverageAccumulator
         var coverage: CostUsageCoverageCounts {
@@ -319,7 +282,8 @@ struct SpendDashboardModel: Equatable, Sendable {
             coveredDayCount: Int,
             chartDomain: ClosedRange<Date>,
             modelHistoryCompleteness: ModelHistoryCompleteness,
-            incompleteModelProviders: Set<UsageProvider> = [],
+            modelTokenAttributionCompleteness: ModelHistoryCompleteness = .incomplete,
+            incompleteModelProviders: Set<ProviderInstanceID> = [],
             tokenMix: CostUsageTokenMix = CostUsageTokenMix(),
             coverageAccumulator: CostUsageCoverageAccumulator = CostUsageCoverageAccumulator(),
             provenance: CostProvenance = .unknown,
@@ -339,6 +303,7 @@ struct SpendDashboardModel: Equatable, Sendable {
             self.coveredDayCount = coveredDayCount
             self.chartDomain = chartDomain
             self.modelHistoryCompleteness = modelHistoryCompleteness
+            self.modelTokenAttributionCompleteness = modelTokenAttributionCompleteness
             self.incompleteModelProviders = incompleteModelProviders
             self.tokenMix = tokenMix
             self.coverageAccumulator = coverageAccumulator
@@ -357,7 +322,7 @@ struct SpendDashboardModel: Equatable, Sendable {
         var rank: Int
         let sessionID: String
         let sourceID: String
-        let provider: UsageProvider
+        let provider: ProviderInstanceID
         let title: String?
         let projectName: String?
         let projectPath: String?
@@ -376,7 +341,7 @@ struct SpendDashboardModel: Equatable, Sendable {
 
     struct HourlyPoint: Identifiable, Equatable, Sendable {
         let sourceID: String
-        let provider: UsageProvider
+        let provider: ProviderInstanceID
         let providerName: String
         let hour: Date
         let cost: Double
@@ -421,6 +386,8 @@ struct SpendDashboardModel: Equatable, Sendable {
         hideNativeCodexWhenOpenCodexPresent: Bool = false,
         selectedDay: Date? = nil) -> Self
     {
+        var seenPlugins: Set<ProviderInstanceID> = []
+        let inputs = inputs.filter { $0.provider.firstPartyProvider != nil || seenPlugins.insert($0.provider).inserted }
         let calculationCalendar = Self.gregorianCalendar(timeZone: calendar.timeZone)
         let availableSources = inputs
             .map { SourceFilterItem(id: $0.id, displayName: $0.displayName) }
@@ -555,7 +522,7 @@ struct SpendDashboardModel: Equatable, Sendable {
     }
 
     private struct DailyAccumulator {
-        let provider: UsageProvider
+        let provider: ProviderInstanceID
         let providerName: String
         var cost: Double?
         var invalid = false
@@ -608,7 +575,7 @@ struct SpendDashboardModel: Equatable, Sendable {
         let providers = Self.providerRows(summaries)
         let scopedSummaries = Self.summaries(summaries, matching: selectedDay)
         var modelSummaries: [InputSummary] = []
-        var incompleteModelProviders = Set<UsageProvider>()
+        var incompleteModelProviders = Set<ProviderInstanceID>()
         for summary in scopedSummaries {
             let summaryModelHistory = Self.modelSummary(summaries: [summary])
             let retainsModelHistory = if summary.totalCost != nil {
@@ -631,10 +598,11 @@ struct SpendDashboardModel: Equatable, Sendable {
         }
         // Aggregate retained named models; source completeness still controls the warnings.
         let modelSummary = Self.modelSummary(summaries: modelSummaries)
-        let modelHistoryCompleteness = modelSummaries.count == scopedSummaries.count &&
-            modelSummary.completeness == .complete && !scopedSummaries.contains(where: \.historyScanIsPartial)
-            ? ModelHistoryCompleteness.complete
-            : ModelHistoryCompleteness.incomplete
+        let modelHistoryIsPartial = scopedSummaries.contains { $0.hasUnpricedRequests || $0.historyScanIsPartial }
+        let modelHistoryCompleteness: ModelHistoryCompleteness = !modelHistoryIsPartial &&
+            modelSummaries.count == scopedSummaries.count && modelSummary.completeness == .complete
+            ? .complete : .incomplete
+        let tokenCompleteness = modelSummary.tokenCompleteness(retained: modelSummaries.count, scoped: scopedSummaries)
         let dailyPoints = Self.dailyPoints(summaries: summaries)
         var tokenMix = CostUsageTokenMix()
         var coverage = CostUsageCoverageAccumulator()
@@ -712,6 +680,7 @@ struct SpendDashboardModel: Equatable, Sendable {
             coveredDayCount: Self.dayCount(in: Self.commonCoverageInterval(summaries: summaries), calendar: calendar),
             chartDomain: Self.chartDomain(bounds: bounds, calendar: calendar),
             modelHistoryCompleteness: modelHistoryCompleteness,
+            modelTokenAttributionCompleteness: tokenCompleteness,
             incompleteModelProviders: incompleteModelProviders,
             tokenMix: tokenMix,
             coverageAccumulator: coverage,
@@ -863,7 +832,7 @@ struct SpendDashboardModel: Equatable, Sendable {
 
         struct Accumulator {
             var name: String
-            let provider: UsageProvider
+            let provider: ProviderInstanceID
             let providerName: String
             let path: String?
             var isProjectless: Bool
@@ -1392,7 +1361,12 @@ struct SpendDashboardModel: Equatable, Sendable {
         displayCalendar: Calendar) -> ClosedRange<Date>
     {
         let bucketCalendar = Self.bucketCalendar(for: input.provider, displayCalendar: displayCalendar)
-        let bucketEnd = bucketCalendar.startOfDay(for: input.snapshot.updatedAt)
+        // Legacy plugins encode their civil windowEnd at noon UTC, independently of the viewer's zone.
+        let windowEnd = input.provider.firstPartyProvider == nil
+            ? bucketCalendar.date(from: Self.utcCalendar.dateComponents(
+                [.year, .month, .day], from: input.snapshot.updatedAt)) ?? input.snapshot.updatedAt
+            : input.snapshot.updatedAt
+        let bucketEnd = bucketCalendar.startOfDay(for: windowEnd)
         let scanEnd = displayCalendar.startOfDay(for: bucketEnd)
         let scanDays = max(1, input.snapshot.historyDays)
         let bucketStart = bucketCalendar.date(byAdding: .day, value: -(scanDays - 1), to: bucketEnd) ?? bucketEnd
@@ -1423,7 +1397,7 @@ struct SpendDashboardModel: Equatable, Sendable {
 
     private static func day(
         _ rawValue: String,
-        provider: UsageProvider,
+        provider: ProviderInstanceID,
         displayCalendar: Calendar) -> Date?
     {
         let bytes = Array(rawValue.utf8)
@@ -1439,17 +1413,16 @@ struct SpendDashboardModel: Equatable, Sendable {
               let year = Int(parts[0]),
               let month = Int(parts[1]),
               let day = Int(parts[2]),
-              let date = bucketCalendar.date(from: DateComponents(year: year, month: month, day: day))
-        else { return nil }
-        guard bucketCalendar.dateComponents([.year, .month, .day], from: date) == DateComponents(
-            year: year,
-            month: month,
-            day: day)
+              let date = bucketCalendar.date(from: DateComponents(year: year, month: month, day: day)),
+              bucketCalendar.dateComponents([.year, .month, .day], from: date) == DateComponents(
+                  year: year,
+                  month: month,
+                  day: day)
         else { return nil }
         return displayCalendar.startOfDay(for: date)
     }
 
-    private static func bucketCalendar(for provider: UsageProvider, displayCalendar: Calendar) -> Calendar {
+    static func bucketCalendar(for provider: ProviderInstanceID, displayCalendar: Calendar) -> Calendar {
         // Provider-specific by design: mistral openrouter xai display calendar
         guard provider == .mistral || provider == .openrouter || provider == .xai else { return displayCalendar }
         // Mistral, OpenRouter, and xAI label daily buckets and snapshot coverage by UTC day. Map each UTC boundary into
